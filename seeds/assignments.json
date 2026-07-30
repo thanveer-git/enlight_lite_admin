@@ -1,0 +1,112 @@
+{
+  "assignments": [
+    {
+      "id": "as_001",
+      "name": "Statistics Inference Worksheet",
+      "gradeType": "Percentage",
+      "rubric": null,
+      "wordLimit": null,
+      "files": [
+        "inference-worksheet.pdf",
+        "inference-v2.pdf"
+      ]
+    },
+    {
+      "id": "as_002",
+      "name": "Argument-Driven Essay",
+      "gradeType": "Percentage",
+      "rubric": "rb_006",
+      "wordLimit": 1200,
+      "files": [
+        "essay-draft-for-the-assigment.pdf",
+        "essay-draft-v2.pdf"
+      ]
+    },
+    {
+      "id": "as_003",
+      "name": "Research Methodology Critique",
+      "gradeType": "CGPA",
+      "rubric": null,
+      "wordLimit": 800,
+      "files": [
+        "methodology-critique.pdf"
+      ]
+    },
+    {
+      "id": "as_004",
+      "name": "Argument-Driven Essay (CGPA Section)",
+      "gradeType": "CGPA",
+      "rubric": "rb_006",
+      "wordLimit": 1500,
+      "files": [
+        "essay-cgpa-section.pdf"
+      ]
+    },
+    {
+      "id": "as_005",
+      "name": "Mid-Term Written Examination",
+      "gradeType": "Marks",
+      "mark": 130,
+      "rubric": null,
+      "wordLimit": 600,
+      "files": [
+        "midterm-answers.pdf"
+      ]
+    },
+    {
+      "id": "as_006",
+      "name": "Lab Report – Methodology",
+      "gradeType": "Marks",
+      "mark": 120,
+      "rubric": "rb_002",
+      "wordLimit": 2000,
+      "files": [
+        "lab-report-methodology.pdf",
+        "lab-appendices.pdf"
+      ]
+    },
+    {
+      "id": "as_007",
+      "name": "Orientation Module Completion",
+      "gradeType": "Comp/Incomp",
+      "rubric": null,
+      "wordLimit": null,
+      "files": [
+        "orientation-checklist.pdf"
+      ]
+    },
+    {
+      "id": "as_008",
+      "name": "Workplace Safety Briefing",
+      "gradeType": "Comp/Incomp",
+      "rubric": "rb_009",
+      "wordLimit": null,
+      "files": [
+        "safety-briefing.pdf",
+        "safety-briefing-slides.pdf"
+      ]
+    },
+    {
+      "id": "as_009",
+      "name": "Climate-Tech Reflection",
+      "gradeType": "gs_letter",
+      "rubric": null,
+      "wordLimit": 500,
+      "files": [
+        "climate-tech-reflection.pdf"
+      ]
+    },
+    {
+      "id": "as_010",
+      "name": "Oral Presentation – Climate Tech",
+      "gradeType": "gs_performance",
+      "rubric": "rb_009",
+      "wordLimit": null,
+      "files": [
+        "climate-tech-overview.pptx",
+        "climate-tech-overview.pdf",
+        "recording.mp4"
+      ]
+    }
+  ]
+}

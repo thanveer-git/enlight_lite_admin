@@ -1,0 +1,132 @@
+.tiptap {
+  outline: none;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: var(--rte-max-height, 360px);
+  overflow-y: auto;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+.tiptap p {
+  margin: 0 0 0.5rem;
+}
+
+.tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.tiptap h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.tiptap ul,
+.tiptap ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.tiptap ul {
+  list-style: disc;
+}
+
+.tiptap ol {
+  list-style: decimal;
+}
+
+.tiptap li > p {
+  margin: 0;
+}
+
+.tiptap a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tiptap strong {
+  font-weight: 600;
+}
+
+.tiptap u {
+  text-decoration: underline;
+}
+
+/* ---- Tables (TipTap Table extension) ---- */
+/* Borders on every cell come from the inlined `border-style`/`width`
+   attributes TipTap's Table extension writes, but Tailwind's preflight
+   resets `border-style` to `solid` only on `border` utility classes —
+   so we re-apply `border: 1px solid …` with `!important` and higher
+   specificity than any user content might produce. */
+table.tiptap-table,
+table[class*="tiptap"] {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  table-layout: fixed;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+.tiptap table,
+.tiptap table th,
+.tiptap table td {
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.tiptap table th,
+.tiptap table td {
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  position: relative;
+  min-width: 1.5rem;
+  background: hsl(var(--background));
+}
+
+.tiptap table th {
+  background: hsl(var(--muted) / 0.5);
+  font-weight: 600;
+  text-align: left;
+}
+
+.tiptap table .selectedCell {
+  background: hsl(var(--accent) / 0.6);
+}
+
+.tiptap table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: hsl(var(--primary));
+  pointer-events: none;
+}
+
+.tiptap table p {
+  margin: 0;
+}
+
+.tiptap table p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}

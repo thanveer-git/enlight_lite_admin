@@ -1,0 +1,585 @@
+02 UX Principles
+
+These are the rules every screen follows.
+
+Example
+
+Simple
+
+Predictable
+
+Consistent
+
+Minimal Clicks
+
+Clear Hierarchy
+
+Keyboard Friendly
+
+Responsive
+
+Dark Mode First
+
+No Visual Noise
+
+Whenever the AI creates something, ask
+
+Does it violate these principles?
+
+03 Design Language
+
+This defines the visual identity.
+
+Example
+
+Modern SaaS
+
+Clean
+
+Minimal
+
+Rounded
+
+Soft Shadows
+
+Flat Colors
+
+No Heavy Gradients
+
+Professional
+
+High Density
+
+Enterprise
+
+This prevents the AI from making one page look like Linear and another like Bootstrap.
+
+04 Design Tokens
+
+Now define
+
+Colors
+
+Typography
+
+Spacing
+
+Radius
+
+Shadow
+
+Opacity
+
+Animation
+
+Border
+
+Z-index
+
+This is your design vocabulary.
+
+Never use
+
+bg-blue-500
+
+Instead
+
+bg-primary
+05 Layout System
+
+This is one of the most important documents.
+
+Every page should follow one of only a few templates.
+
+For example:
+
+App Layout
+
+Header
+
+Sidebar
+
+Content
+
+Inside content
+
+Breadcrumb
+
+Page Title
+
+Toolbar
+
+Main Content
+
+Pagination
+
+Now define additional layouts
+
+Listing Page
+
+Form Page
+
+Wizard Page
+
+Dashboard
+
+Settings
+
+Authentication
+
+Instead of 100 page layouts, you might only have 5.
+
+06 Navigation System
+
+Document how navigation behaves.
+
+Sidebar
+
+Expanded
+
+Collapsed
+
+Drawer
+
+Header
+
+Search
+
+Notifications
+
+Profile
+
+Quick Actions
+
+Breadcrumbs
+
+Always visible
+
+Maximum depth
+
+Responsive collapse
+07 Component Library
+
+Now list every reusable component.
+
+Don't design them yet.
+
+Just inventory them.
+
+Example
+
+Primitive
+Button
+
+Input
+
+Card
+
+Badge
+
+Avatar
+
+Checkbox
+
+Icon
+
+Composite
+
+Sidebar
+
+Header
+
+Toolbar
+
+Breadcrumb
+
+Data Table
+
+Pagination
+
+Dialog
+
+Toast
+
+Feature
+
+Course Card
+
+Question Builder
+
+Student Progress
+
+This document answers
+
+Does this component already exist?
+
+08 Interaction Patterns
+
+This is the document almost nobody writes.
+
+Example
+
+Tables
+
+Every table should behave the same.
+
+Search
+
+Sort
+
+Filter
+
+Pagination
+
+Loading
+
+Empty
+
+Actions
+
+Bulk Actions
+
+Forms
+
+Label
+
+Description
+
+Validation
+
+Required
+
+Error
+
+Success
+
+Dialogs
+
+Title
+
+Description
+
+Actions
+
+Escape closes
+
+Overlay click closes
+
+Delete confirmation
+
+Icon
+
+Message
+
+Cancel
+
+Delete
+
+Now every delete dialog looks identical.
+
+09 Responsive System
+
+Don't say
+
+Desktop
+
+Tablet
+
+Mobile
+
+Instead define behavior.
+
+Sidebar
+
+Desktop
+
+Expanded
+
+Tablet
+
+Collapsed
+
+Mobile
+
+Drawer
+
+Table
+
+Desktop
+
+Table
+
+Mobile
+
+Cards
+
+This becomes documentation.
+
+10 Accessibility
+
+Define requirements.
+
+Keyboard Navigation
+
+Focus States
+
+ARIA
+
+Screen Readers
+
+Contrast
+
+Tab Order
+
+Escape Support
+
+The AI should never forget these.
+
+11 Motion
+
+Animation rules.
+
+Example
+
+Duration
+
+150ms
+
+200ms
+
+300ms
+
+Easing
+
+Ease In
+
+Ease Out
+
+Components
+
+Modal
+
+Dropdown
+
+Tooltip
+
+Toast
+
+Sidebar
+
+Never invent animation.
+
+12 Icons
+
+Define
+
+Library
+
+Size
+
+Stroke Width
+
+Color
+
+Filled vs Outline
+
+This prevents mixed icon sets.
+
+13 State Management
+
+This isn't Redux.
+
+It's UI states.
+
+Every component should document
+
+Default
+
+Hover
+
+Pressed
+
+Focused
+
+Disabled
+
+Loading
+
+Success
+
+Error
+
+Empty
+
+For example
+
+Button
+
+Primary
+
+Hover
+
+Loading
+
+Disabled
+
+Table
+
+Loading
+
+Empty
+
+Error
+
+Data
+14 Page Templates
+
+Now define only a few templates.
+
+Example
+
+Listing
+
+Breadcrumb
+
+Title
+
+Toolbar
+
+Table
+
+Pagination
+
+Form
+
+Breadcrumb
+
+Title
+
+Description
+
+Form
+
+Actions
+
+Dashboard
+
+Stats
+
+Charts
+
+Recent Activity
+
+Quick Actions
+
+Settings
+
+Sidebar
+
+Content
+
+Most admin pages fit into these templates.
+
+15 Feature Guidelines
+
+Now define business modules.
+
+Users
+
+Courses
+
+Assessments
+
+Certificates
+
+Reports
+
+Organizations
+
+Each module should only use existing components.
+
+No custom UI unless approved.
+
+16 Folder Structure
+
+Now define your project structure.
+
+Not code.
+
+Just architecture.
+
+app/
+
+components/
+
+features/
+
+hooks/
+
+providers/
+
+lib/
+
+styles/
+
+types/
+
+constants/
+
+services/
+
+This never changes.
+
+17 Coding Standards
+
+Now define
+
+Naming
+
+File Structure
+
+Imports
+
+Tailwind Rules
+
+Props
+
+Composition
+
+Hooks
+
+TypeScript
+
+Comments
+
+This becomes mandatory.
+
+18 AI Agent Rules
+
+Finally
+
+This is where you control the AI.
+
+Example rules
+
+Never create duplicate components.
+
+Never create duplicate layouts.
+
+Always reuse primitives.
+
+Always check the component library first.
+
+Never hardcode colors.
+
+Never hardcode spacing.
+
+Always use design tokens.
+
+Never create a page without using a page template.
+
+Never introduce a new pattern without approval.
+
+Prefer composition over inheritance.
+
+Prefer reusable components over page-specific implementations.

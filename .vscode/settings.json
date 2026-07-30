@@ -1,0 +1,17 @@
+{
+    "mrMultiCoder.permissionMode": "bypassPermissions",
+    "mrMultiCoder.mcpServers": {
+        "ClaudeOpus": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "claudeopus-mcp"
+            ],
+            "env": {
+                "CLAUDEOPUS_API_KEY": "oc_WAmoVjAM_GXD_wYeewOUTucRxBJHfwAcGA-PmwHnZ1",
+                "CLAUDEOPUS_URL": "https://api.omegaplusapi.com/v1/messages"
+            },
+            "enabled": true
+        }
+    }
+}
