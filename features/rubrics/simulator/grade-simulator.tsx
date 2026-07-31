@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   ListChecks,
   RotateCcw,
-  TrendingUp,
   XCircle,
 } from "lucide-react";
 
@@ -144,7 +143,7 @@ function metricForScale(
     const ranges = scale?.ranges ?? [];
     const sorted = [...ranges].sort((a, b) => b.minMarks - a.minMarks);
     const band = sorted.find((b) => percentage >= b.minMarks && percentage <= b.maxMarks);
-    return band ? { label: "Band", value: band.grade } : { label: "Band", value: "—" };
+    return band ? { label: "Grade", value: band.grade } : { label: "Grade", value: "—" };
   }
   return { label: "Percentage", value: `${percentage.toFixed(1)}%` };
 }
@@ -805,12 +804,18 @@ function ResultHero({
   const weightedTotal = getWeightedTotal(result);
   const metric = metricForScale(scale, result.percentage);
   const scaleName = scale?.name ?? "";
+  const primaryDisplay =
+    metric && metric.label !== "Grade" ? metric.value : gradeDisplay;
+  const secondaryDisplay =
+    metric && metric.label !== "Grade"
+      ? `Percentage: ${result.percentage?.toFixed(1)}%`
+      : metric?.label === "Grade" && metric.value !== "—"
+        ? `Percentage: ${result.percentage?.toFixed(1)}%`
+        : null;
 
   const methodLabel = gradingMethod === "weighted_average" ? "Weighted avg" : "Grade profile";
   const typeLabel = rubricType === "scored" ? "Scored" : "Unscored";
   const resultLabel = isPass ? "Pass" : isFail ? "Fail" : "—";
-
-  const passMark = weightedTotal ? (weightedTotal.possible * 0.5).toFixed(1) : null;
 
   const gradeColorClass =
     gradeDisplay === "—"
@@ -857,37 +862,12 @@ function ResultHero({
                     ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
                     : "bg-muted text-muted-foreground"
               }
-              label="Result"
+              label="Status"
               value={resultLabel}
             />
           </div>
 
-          {/* Row 3: Score / Percentage / Pass mark chips */}
-          <div className="flex items-center gap-2 pt-1">
-            {weightedTotal && (
-              <div className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border bg-muted/20 px-2 py-1 text-[11px] tabular-nums">
-                <BarChart3 className="size-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Score</span>
-                <span className="font-semibold text-foreground">
-                  {weightedTotal.earned.toFixed(1)} / {weightedTotal.possible.toFixed(1)}
-                </span>
-              </div>
-            )}
-            {metric && (
-              <div className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border bg-muted/20 px-2 py-1 text-[11px] tabular-nums">
-                <TrendingUp className="size-3 text-muted-foreground" />
-                <span className="text-muted-foreground">{metric.label}</span>
-                <span className="font-semibold text-foreground">{metric.value}</span>
-              </div>
-            )}
-            {passMark != null && (
-              <div className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border bg-muted/20 px-2 py-1 text-[11px] tabular-nums">
-                <Award className="size-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Pass mark</span>
-                <span className="font-semibold text-foreground">{passMark}</span>
-              </div>
-            )}
-          </div>
+          {/* Row 3 removed - chips moved elsewhere */}
         </div>
 
         {/* Part 2: 30% - Overall Grade */}
@@ -896,17 +876,13 @@ function ResultHero({
             percentage={result.percentage}
             tone={isPass ? "pass" : isFail ? "fail" : "neutral"}
           />
-          <div className="relative z-10 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <Calculator className="size-3 text-primary" />
-            Overall Grade
-          </div>
           <div className="relative z-10 flex flex-col items-center gap-1">
             <div className={`text-center text-3xl font-semibold leading-none tracking-tight tabular-nums ${gradeColorClass}`}>
-              {gradeDisplay}
+              {primaryDisplay}
             </div>
-            {metric && (
-              <div className="text-xs font-semibold tabular-nums text-muted-foreground">
-                {metric.value}
+            {metric && metric.label !== "Status" && (
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {metric.label}
               </div>
             )}
           </div>

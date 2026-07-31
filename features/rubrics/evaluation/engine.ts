@@ -313,7 +313,7 @@ export function computeWeightedScore(
     const normalizedScore = weightedScore / rubricMaximumPoints;
     const normalizedMax = weightedMax / rubricMaximumPoints;
     explanation.push(
-      `Weighted score: ${normalizedScore.toFixed(2)} / ${normalizedMax.toFixed(2)} = ${percentage.toFixed(2)}%.`,
+      `Weighted score: ${normalizedScore.toFixed(2)} out of ${normalizedMax.toFixed(2)} (${percentage.toFixed(2)}%).`,
     );
   }
   return { criteria: out, weightedScore, weightedMax, percentage };
