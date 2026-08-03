@@ -37,8 +37,14 @@ export function getRubricForSubmission(submission: Submission): ResolvedRubric |
 }
 
 export function getGradeScaleForSubmission(submission: Submission): GradeScale | null {
-  if (!submission.gradeScaleId) return null;
-  return findGradeScale(submission.gradeScaleId);
+  // Prefer `gradeScaleId` (named scales like `gs_letter`); fall back to
+  // `gradeType` (fixed formats like "Percentage", "Marks", "Comp/Incomp")
+  // because seeded submissions store the format in only one of those
+  // fields. Both name the same GradeScale.id, so this is a lookup, not a
+  // semantic merge.
+  if (submission.gradeScaleId) return findGradeScale(submission.gradeScaleId);
+  if (submission.gradeType) return findGradeScale(submission.gradeType);
+  return null;
 }
 
 /** Sibling submissions within the same assignment — used by prev/next. */

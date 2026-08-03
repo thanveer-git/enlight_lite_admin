@@ -370,12 +370,25 @@ function pinnedStyle<TData>(column: Column<TData, unknown>): React.CSSProperties
  * on pinned cells so the pinned strip reads as a single continuous
  * frosted panel rather than a stack of separated strips.
  *
+ * The right-pinned strip gets a slightly heavier inset shadow and a
+ * touch more opacity than the left, because — unlike a left-pinned
+ * column where data columns visibly slide behind it as the user
+ * scrolls — a right-pinned column sits at the trailing edge of the
+ * scrollable content, so very little actually scrolls *under* it.
+ * Without that extra weight, the right strip looks like a flat
+ * translucent panel and reads as a weaker "frosted" treatment than
+ * the left, even though the same blur is applied.
+ *
  * Tokens:
- *   - `bg-card/85` — translucent card surface, blends into the page
- *     background while leaving content legible.
+ *   - `bg-card/85` (left) / `bg-card/90` (right) — translucent card
+ *     surface. The right strip uses slightly more opacity to make
+ *     up for the absence of content sliding behind it.
  *   - `backdrop-blur-sm` — mild backdrop blur; subtle, not glassy.
  *   - `saturate-[1.1]` — gentle saturation boost for a more polished feel.
- *   - Inset border via `--border` token — works in light + dark themes.
+ *   - Inset shadow via `--border` token — works in light + dark themes.
+ *     The right side uses a wider shadow so the frozen strip's left
+ *     edge reads as a clear panel boundary even when the table isn't
+ *     scrolled.
  *   - `border-b-transparent` — neutralises the row separator on the
  *     pinned cell so the frosted panel stays continuous.
  */
@@ -385,7 +398,7 @@ function pinnedCellClass<TData>(column: Column<TData, unknown>): string {
     return "bg-card/85 backdrop-blur-sm backdrop-saturate-[1.1] border-b-transparent shadow-[inset_-1px_0_0_hsl(var(--border))]";
   }
   if (side === "right") {
-    return "bg-card/85 backdrop-blur-sm backdrop-saturate-[1.1] border-b-transparent shadow-[inset_1px_0_0_hsl(var(--border))]";
+    return "bg-card/90 backdrop-blur-sm backdrop-saturate-[1.1] border-b-transparent shadow-[-8px_0_12px_-6px_hsl(var(--foreground)/0.06),inset_1px_0_0_hsl(var(--border))]";
   }
   return "";
 }

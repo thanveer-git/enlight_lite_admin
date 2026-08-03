@@ -18,6 +18,7 @@
 import { format } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 import {
+  Award,
   CalendarClock,
   CheckCircle2,
   FileText,
@@ -26,11 +27,15 @@ import {
   Paperclip,
   ShieldCheck,
   User,
+  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ECard } from "@/components/composite/e-card";
 import { cn } from "@/lib/utils";
+import { WaterFill } from "@/features/rubrics/simulator/grade-simulator";
+import { isPassingBand } from "@/features/rubrics/evaluation/helpers";
+import type { GradeScale } from "@/features/rubrics/constants";
 
 import type { Submission } from "../types";
 
@@ -39,6 +44,8 @@ interface SubmissionOverviewCardProps {
   rubricName: string | null;
   totalMarks: number | null;
   gradeFormat: string | null;
+  /** Active grade scale. Used to decide whether pass/fail is configured. */
+  gradeScale: GradeScale | null;
   /** Engine percentage (0–100). Falls back to null when unavailable. */
   scorePercent: number | null;
   /** Pass/fail result of the engine. Used to colour the gauge. */
@@ -81,6 +88,7 @@ export function SubmissionOverviewCard({
   rubricName,
   totalMarks: _totalMarks,
   gradeFormat,
+  gradeScale,
   scorePercent,
   passFail,
   effectiveGrade,
@@ -94,7 +102,41 @@ export function SubmissionOverviewCard({
   const displayedScore = scorePercent ?? submission.finalPercentage ?? null;
   const displayedGrade =
     effectiveGrade ?? submission.finalGrade ?? null;
-  const displayedPass = passFail ?? null;
+  // Pass/fail is only meaningful when the active grade scale actually
+  // defines a usable pass threshold (`passBands` non-empty for letter
+  // scales, `passMark`/`passMarkRatio`/`completeMin` > 0 for numeric
+  // formats). A threshold of 0 (or missing) means "no pass/fail" — we
+  // render the gauge as neutral and skip the chip entirely instead of
+  // inventing a verdict.
+  const cfg = gradeScale?.configuration;
+  const hasPassFailConfig =
+    (gradeScale?.passBands?.length ?? 0) > 0 ||
+    (cfg?.passMark ?? 0) > 0 ||
+    (cfg?.passMarkRatio ?? 0) > 0 ||
+    (cfg?.completeMin ?? 0) > 0;
+  const displayedPass =
+    hasPassFailConfig &&
+    (passFail ??
+      (displayedScore != null
+        ? isPassingBand(displayedScore, gradeScale, submission.totalMarks)
+          ? "pass"
+          : "fail"
+        : null));
+  // The gauge shows the *received* grade in its native format, never a
+  // normalized percentage. Append `%` only for the Percentage format;
+// every other format renders the value as-is so the reviewer sees the
+// same number they'd type into the field (CGPA "7.5", Marks "42",
+// "Complete", "B", "Excellent", …). When nothing has been graded yet
+  // we render "—" instead of inventing a placeholder.
+  const isPercentageFormat = gradeFormat === "Percentage";
+  const displayedGradeText =
+    displayedGrade == null
+      ? "—"
+      : isPercentageFormat
+        ? displayedGrade.endsWith("%")
+          ? displayedGrade
+          : `${displayedGrade}%`
+        : displayedGrade;
   const timing = TIMING(attempt.submittedAt, attempt.dueAt);
 
   const overLimit =
@@ -251,21 +293,68 @@ export function SubmissionOverviewCard({
           </div>
         </div>
 
-        {/* Right: grade summary — single vertically-centered unit */}
+        {/* Right: grade summary — WaterFill backdrop with grade + pass/fail chip */}
         <div className="flex w-full flex-col items-center justify-center gap-2.5 py-3 md:max-w-[14rem] md:border-l md:border-border/60 md:pl-6">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Result
+            {gradeFormatEyebrow(gradeFormat) && (
+              <>
+                {" · "}
+                <span className="text-foreground">
+                  {gradeFormatEyebrow(gradeFormat)}
+                </span>
+              </>
+            )}
           </p>
-          <ScoreRing percent={displayedScore} className={ringStrokeClass(gaugeColor)} />
-          {gradeFormat !== "Percentage" && (
-            <p
-              className={cn(
-                "text-2xl font-semibold leading-none tabular-nums",
-                gaugeColor,
+          <div className="relative flex h-32 w-full flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border bg-muted/10 p-2">
+            <WaterFill
+              percentage={displayedScore}
+              tone={
+                displayedPass === "pass"
+                  ? "pass"
+                  : displayedPass === "fail"
+                    ? "fail"
+                    : "neutral"
+              }
+            />
+            <div className="relative z-10 flex flex-col items-center gap-1">
+              <span
+                className={cn(
+                  "text-3xl font-semibold leading-none tracking-tight tabular-nums",
+                  gaugeColor,
+                )}
+              >
+                {displayedGradeText}
+              </span>
+              {hasPassFailConfig && displayedPass && (
+                <Badge
+                  variant={
+                    displayedPass === "pass" ? "success" : "destructive"
+                  }
+                  className="rounded-full text-[10px]"
+                >
+                  {displayedPass === "pass" ? (
+                    <CheckCircle2 className="mr-1 size-3" aria-hidden />
+                  ) : (
+                    <XCircle className="mr-1 size-3" aria-hidden />
+                  )}
+                  {displayedPass === "pass" ? "Pass" : "Fail"}
+                </Badge>
               )}
+            </div>
+          </div>
+          {/* Show the underlying percentage for non-Percentage formats —
+              letter grades, CGPA, Marks, and Complete/Incomplete all
+              hide the raw 0–100 score by default, so surface it as a
+              small chip below the gauge for context. */}
+          {!isPercentageFormat && displayedScore != null && (
+            <Badge
+              variant="outline"
+              className="rounded-full text-[10px] font-medium tabular-nums text-muted-foreground"
+              title="Calculated percentage from the rubric"
             >
-              {displayedGrade ?? "—"}
-            </p>
+              Percentage: {Math.round(displayedScore)}%
+            </Badge>
           )}
         </div>
       </ECard.Body>
@@ -294,65 +383,6 @@ export function SubmissionOverviewCard({
         </ECard.Footer>
       )}
     </ECard>
-  );
-}
-
-/** Circular progress ring. Two concentric circles — track + fill —
- * with the percentage number centred. */
-function ScoreRing({
-  percent,
-  className,
-}: {
-  percent: number | null;
-  className: string;
-}) {
-  const clamped = percent == null ? 0 : Math.min(100, Math.max(0, percent));
-  const radius = 36;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - clamped / 100);
-
-  return (
-    <div className="relative h-20 w-20 shrink-0">
-      <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
-        <circle
-          cx="40"
-          cy="40"
-          r={radius}
-          className="stroke-muted/50 fill-none"
-          strokeWidth="6"
-        />
-        <circle
-          cx="40"
-          cy="40"
-          r={radius}
-          className={cn(
-            "fill-none transition-[stroke-dashoffset] duration-500 ease-out",
-            percent == null ? "stroke-muted-foreground/40" : className,
-          )}
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(clamped)}
-        aria-label="Score percentage"
-      >
-        <span
-          className={cn(
-            "text-base font-semibold leading-none tabular-nums",
-            percent == null ? "text-muted-foreground" : "text-foreground",
-          )}
-        >
-          {percent == null ? "—" : `${Math.round(clamped)}%`}
-        </span>
-      </div>
-    </div>
   );
 }
 
@@ -429,13 +459,6 @@ function MetaColumn({
   );
 }
 
-/** Stroke colour for the score ring fill. */
-function ringStrokeClass(gaugeColor: string): string {
-  if (gaugeColor === "text-success") return "stroke-success";
-  if (gaugeColor === "text-destructive") return "stroke-destructive";
-  return "stroke-muted-foreground";
-}
-
 /**
  * The hero card displays the *raw* grade-type value (e.g. `Percentage`,
  * `gs_letter`) — not the resolved scale's display name. The chip in the
@@ -446,4 +469,24 @@ function ringStrokeClass(gaugeColor: string): string {
 function gradeTypeLabel(gradeFormat: string | null): string | null {
   if (!gradeFormat) return null;
   return gradeFormat;
+}
+
+/**
+ * Short, uppercase label for the eyebrow above WaterFill
+ * ("RESULT · PERCENTAGE", "RESULT · LETTER", …). Looks up the scale
+ * catalog when the raw id is a named scale id (`gs_letter`,
+ * `gs_performance`); falls back to the raw id otherwise.
+ */
+function gradeFormatEyebrow(gradeFormat: string | null): string | null {
+  if (!gradeFormat) return null;
+  const lookup: Record<string, string> = {
+    Percentage: "PERCENTAGE",
+    CGPA: "CGPA",
+    Marks: "MARKS",
+    "Comp/Incomp": "COMP / INCOMP",
+    NamedBand: "NAMED BAND",
+    gs_letter: "LETTER",
+    gs_performance: "PERFORMANCE",
+  };
+  return lookup[gradeFormat] ?? gradeFormat.toUpperCase();
 }

@@ -38,23 +38,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         Skip to content
       </a>
-      <div className="flex h-dvh w-full bg-background">
-        {!hideSidebar && <AppSidebar />}
-        <div className="flex min-h-dvh min-w-0 flex-1 flex-col overflow-y-auto">
-          <AppHeader />
-          <main id="main" className="flex-1">
-            <div
-              className={
-                hideSidebar
-                  ? "w-full px-4 py-6 sm:px-6 lg:px-8"
-                  : "mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
-              }
-            >
-              {children}
-            </div>
-          </main>
+      <div className="flex h-dvh w-full flex-col bg-background">
+        <AppHeader />
+        <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden p-2 pt-16">
+          {!hideSidebar && <AppSidebar />}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+            <main id="main" className="flex-1">
+              <div
+                className={
+                  hideSidebar
+                    ? "w-full px-4 py-6 sm:px-6 lg:px-8"
+                    : "mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+                }
+              >
+                {children}
+              </div>
+            </main>
+          </div>
+          {!hideSidebar && <AppSidebarMobile />}
         </div>
-        {!hideSidebar && <AppSidebarMobile />}
       </div>
     </TooltipProvider>
   );

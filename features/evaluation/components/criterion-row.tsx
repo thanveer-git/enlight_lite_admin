@@ -44,6 +44,7 @@ interface CriterionRowProps {
   points: number | null;
   description?: string;
   minPassLevelId: string | null;
+  isLetterGrading: boolean;
   locked: boolean;
   /**
    * Atomic rating setter. Both `levelId` and `points` are applied in a
@@ -154,6 +155,7 @@ export function CriterionRow({
   points,
   description,
   minPassLevelId,
+  isLetterGrading,
   locked,
   onRatingChange,
 }: CriterionRowProps) {
@@ -166,8 +168,14 @@ export function CriterionRow({
     [matrix.levels, levelId],
   );
 
+  // Min-pass is only enforced for letter-grading submissions with pass
+  // bands. For other formats (Percentage, CGPA, Marks, Comp/Incomp)
+  // the verdict comes from the final score, not the per-criterion
+  // min-pass level — so gracefully hide the UI here.
+  const minPassApplies = isLetterGrading && Boolean(minPassLevelId);
+
   const passingState = useMemo(() => {
-    if (!minPassLevelId || !selectedLevel) return null;
+    if (!minPassApplies || !selectedLevel || !minPassLevelId) return null;
     const selected = levelIndexInOrder(matrix.levels, selectedLevel.id);
     const floor = levelIndexInOrder(matrix.levels, minPassLevelId);
     if (selected < 0 || floor < 0) return null;

@@ -51,6 +51,7 @@ export function RubricSimulatorDialog({
       matrix={matrix}
       rubricType={type}
       rubricName={displayName}
+      detail={detail}
       open={open}
       onOpenChange={onOpenChange}
       showTrigger={false}

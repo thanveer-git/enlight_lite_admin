@@ -84,6 +84,10 @@ export function AssessmentTab({
                   points={rating?.points ?? null}
                   description={rubric.matrix.descriptions[criterion.id]?.[rating?.levelId ?? ""]}
                   minPassLevelId={rubric.matrix.minPassLevelId}
+                  isLetterGrading={
+                    gradeScale?.meta?.gradeType === "letter_grading" &&
+                    (gradeScale.passBands?.length ?? 0) > 0
+                  }
                   locked={derived.rubricLocked}
                   onRatingChange={(levelId, points) =>
                     onRatingChange(criterion.id, levelId, points)

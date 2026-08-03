@@ -44,12 +44,12 @@ export interface ResolvedOverride {
   blocker: "no_reason" | null;
 }
 
-function passForBand(band: ScaleBand, scale: GradeScale | null): PassFail {
-  return isPassingBand(band, scale) ? "pass" : "fail";
+function passForBand(band: ScaleBand, scale: GradeScale | null, totalMarks: number | null): PassFail {
+  return isPassingBand(band, scale, totalMarks) ? "pass" : "fail";
 }
 
-function passForPercent(value: number): PassFail {
-  return isPassingBand(value) ? "pass" : "fail";
+function passForPercent(value: number, scale: GradeScale | null, totalMarks: number | null): PassFail {
+  return isPassingBand(value, scale, totalMarks) ? "pass" : "fail";
 }
 
 function resolveOverrideValue(input: OverrideSource): string {
@@ -106,21 +106,24 @@ export function resolveOverride(input: OverrideSource): ResolvedOverride {
     const scale = input.gradeScale;
     if (scale?.ranges) {
       const match = scale.ranges.find((b) => b.grade === effectiveGrade);
-      if (match) passFail = passForBand(match, scale);
+      if (match) passFail = passForBand(match, scale, input.totalMarks);
     }
   } else if (input.gradeFormat === "Comp/Incomp") {
-    passFail = effectiveGrade === "Complete" ? "pass" : "fail";
+    // Trust the configured `completeLabel`/`incompleteLabel` so renaming
+    // them in the scale doesn't desync the verdict.
+    const complete = input.gradeScale?.configuration?.completeLabel ?? "Complete";
+    passFail = effectiveGrade === complete ? "pass" : "fail";
   } else if (input.gradeFormat === "NamedBand") {
     const scale = input.gradeScale;
     const match = scale?.ranges?.find((b) => b.grade === effectiveGrade);
-    passFail = match ? passForBand(match, scale) : "unknown";
+    passFail = match ? passForBand(match, scale, input.totalMarks) : "unknown";
   } else {
     const parsed = parseNumericDirectGrade(
       effectiveGrade,
       input.gradeFormat,
       input.totalMarks,
     );
-    if (parsed.ok) passFail = passForPercent(parsed.value);
+    if (parsed.ok) passFail = passForPercent(parsed.value, input.gradeScale, input.totalMarks);
   }
 
   return {

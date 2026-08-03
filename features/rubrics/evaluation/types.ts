@@ -11,6 +11,12 @@ export interface EvaluateRubricInput {
   rubricType: RubricType;
   ratings: Record<string, CriterionRating>;
   gradeScale: GradeScale | null;
+  /**
+   * Per-assignment mark ceiling, used by `Marks` scales whose pass
+   * threshold is `passMarkRatio * totalMarks`. Optional — when absent,
+   * the engine falls back to the legacy 50% rule.
+   */
+  totalMarks?: number | null;
 }
 
 export interface CriterionEvaluation {

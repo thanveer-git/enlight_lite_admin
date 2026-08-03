@@ -5,13 +5,14 @@
  * (document §4.10).
  *
  * Format-aware: numeric input (clamped) for CGPA/Percentage/Marks;
- * select for Comp/Incomplete; select for NamedBand where the active
- * scale supplies the list.
+ * select for Comp/Incomplete; select + slider for NamedBand where the
+ * active scale supplies the list and band ranges.
  */
-import { useId } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,136 @@ interface DirectGradeRowProps {
   onChange: (value: string) => void;
 }
 
+interface NamedBandRowProps {
+  gradeScale: GradeScale | null;
+  value: string;
+  locked: boolean;
+  onChange: (value: string) => void;
+}
+
+/**
+ * Dropdown + slider + input combo for letter/perf-style grading.
+ *
+ * The three controls stay bound together: the slider and input move
+ * in lockstep, and any change snaps to a band so the dropdown label
+ * is always consistent with the percentage.
+ */
+function NamedBandRow({ gradeScale, value, locked, onChange }: NamedBandRowProps) {
+  const inputId = useId();
+  const bands = useMemo(() => bandsForNamedScale(gradeScale), [gradeScale]);
+  const ranges = gradeScale?.ranges ?? [];
+
+  const activeBand = bands.includes(value) ? value : null;
+  const activeRange = activeBand
+    ? ranges.find((r) => r.grade === activeBand) ?? null
+    : null;
+  // When no band is selected, default the slider to the lowest band's
+  // midpoint rather than 0 — 0 isn't a meaningful position for any
+  // band and the thumb visually anchors somewhere sensible.
+  const defaultRange = ranges.length > 0 ? ranges[ranges.length - 1]! : null;
+  const bandCenter = activeRange
+    ? (activeRange.minMarks + activeRange.maxMarks) / 2
+    : defaultRange
+      ? (defaultRange.minMarks + defaultRange.maxMarks) / 2
+      : 0;
+
+  // Local slider position so the thumb tracks the cursor smoothly while
+  // dragging. The band label is only updated on release
+  // (`onValueCommit`), which keeps the dropdown label and the input
+  // number in sync without snapping the thumb mid-drag.
+  const [sliderPos, setSliderPos] = useState<number>(bandCenter);
+  // Re-sync when the active band changes externally (e.g. dropdown pick).
+  useEffect(() => {
+    setSliderPos(bandCenter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBand]);
+
+  const bandForPercent = (pct: number): string | null => {
+    const r = ranges.find((b) => pct >= b.minMarks && pct <= b.maxMarks);
+    return r?.grade ?? null;
+  };
+
+  const handleSliderChange = (values: number[]) => {
+    setSliderPos(values[0] ?? 0);
+  };
+
+  const handleSliderCommit = (values: number[]) => {
+    const pct = values[0] ?? 0;
+    const next = bandForPercent(pct);
+    if (next && next !== activeBand) onChange(next);
+  };
+
+  const handlePercentInput = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === "") {
+      onChange("");
+      return;
+    }
+    if (!/^\d*\.?\d*$/.test(trimmed)) return;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n)) return;
+    const clamped = Math.min(100, Math.max(0, n));
+    setSliderPos(clamped);
+    const next = bandForPercent(clamped);
+    if (next) onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
+        Grade band
+      </Label>
+      <Select
+        value={activeBand ?? undefined}
+        onValueChange={onChange}
+        disabled={locked}
+      >
+        <SelectTrigger id={inputId} className="h-9 w-full text-sm">
+          <SelectValue placeholder="Choose Grade" />
+        </SelectTrigger>
+        <SelectContent>
+          {bands.map((b) => (
+            <SelectItem key={b} value={b}>
+              {b}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {bands.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          No bands configured for the active grade scale.
+        </p>
+      ) : (
+        <div className="flex items-center gap-3 pt-1">
+          <Slider
+            min={0}
+            max={100}
+            step={0.1}
+            value={[sliderPos]}
+            onValueChange={handleSliderChange}
+            onValueCommit={handleSliderCommit}
+            disabled={locked}
+            aria-label="Grade band percentage"
+            className="flex-1 [&_.bg-transparent]:!bg-primary"
+          />
+          <Input
+            type="text"
+            inputMode="decimal"
+            value={activeRange ? sliderPos.toFixed(1).replace(/\.0$/, "") : ""}
+            onChange={(e) => handlePercentInput(e.target.value)}
+            disabled={locked}
+            aria-label="Grade percentage"
+            className="h-8 w-16 shrink-0 border-border/60 bg-transparent text-center text-sm tabular-nums"
+            placeholder="0"
+          />
+          <span className="shrink-0 text-xs text-muted-foreground">%</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DirectGradeRow({
   format,
   totalMarks,
@@ -44,12 +175,13 @@ export function DirectGradeRow({
   const inputId = useId();
 
   if (format === "Comp/Incomp") {
+    const valid = value === "Complete" || value === "Incomplete" ? value : undefined;
     return (
       <div className="space-y-2">
         <Label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
           Result
         </Label>
-        <Select value={value || "__none__"} onValueChange={(v) => onChange(v === "__none__" ? "" : v)} disabled={locked}>
+        <Select value={valid} onValueChange={onChange} disabled={locked}>
           <SelectTrigger id={inputId} className="h-9 w-full text-sm">
             <SelectValue placeholder="Select result" />
           </SelectTrigger>
@@ -62,31 +194,14 @@ export function DirectGradeRow({
     );
   }
 
-  if (format === "NamedBand") {
-    const bands = bandsForNamedScale(gradeScale);
+  if (format === "NamedBand" || format.startsWith("gs_")) {
     return (
-      <div className="space-y-2">
-        <Label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
-          Grade band
-        </Label>
-        <Select value={value || "__none__"} onValueChange={(v) => onChange(v === "__none__" ? "" : v)} disabled={locked}>
-          <SelectTrigger id={inputId} className="h-9 w-full text-sm">
-            <SelectValue placeholder="Select grade band" />
-          </SelectTrigger>
-          <SelectContent>
-            {bands.map((b) => (
-              <SelectItem key={b} value={b}>
-                {b}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {bands.length === 0 && (
-          <p className="text-[11px] text-muted-foreground">
-            No bands configured for the active grade scale.
-          </p>
-        )}
-      </div>
+      <NamedBandRow
+        gradeScale={gradeScale}
+        value={value}
+        locked={locked}
+        onChange={onChange}
+      />
     );
   }
 

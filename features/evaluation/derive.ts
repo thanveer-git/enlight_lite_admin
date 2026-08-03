@@ -7,6 +7,7 @@
  */
 import type { GradeScale } from "@/features/rubrics/constants";
 import { evaluateRubric } from "@/features/rubrics/evaluation";
+import { isPassingBand } from "@/features/rubrics/evaluation/helpers";
 import type {
   EvaluationResult,
   PassFail,
@@ -63,6 +64,7 @@ function computeEngine(
     rubricType: rubric.type,
     ratings: draft.ratings,
     gradeScale,
+    totalMarks: submission.totalMarks,
   });
 }
 
@@ -95,12 +97,27 @@ function effectiveFromDirect(
   format: DirectGradeFormat,
   raw: string,
   totalMarks: number | null,
+  gradeScale: GradeScale | null,
 ): { grade: string | null; passFail: PassFail | null; percentage: number | null } {
   if (format === "Comp/Incomp") {
-    if (raw === "Complete" || raw === "Incomplete") {
-      return { grade: raw, passFail: raw === "Complete" ? "pass" : "fail", percentage: null };
+    // Trust the configured `completeLabel`/`incompleteLabel` so renaming
+    // them in the scale doesn't desync the verdict.
+    const complete = gradeScale?.configuration?.completeLabel ?? "Complete";
+    const incomplete = gradeScale?.configuration?.incompleteLabel ?? "Incomplete";
+    if (raw === complete || raw === incomplete) {
+      return { grade: raw, passFail: raw === complete ? "pass" : "fail", percentage: null };
     }
     return { grade: null, passFail: null, percentage: null };
+  }
+  // Named-band / `gs_*` formats: the value is a scale band label, not
+  // a number. Look up its `minMarks` to derive a percentage for the
+  // WaterFill, and use the canonical pass rule so the chip reflects
+  // whether the band is passing on the active scale.
+  if (format === "NamedBand" || format.startsWith("gs_")) {
+    const range = gradeScale?.ranges?.find((b) => b.grade === raw) ?? null;
+    if (!range) return { grade: raw || null, passFail: null, percentage: null };
+    const passFail: PassFail = isPassingBand(range, gradeScale, totalMarks) ? "pass" : "fail";
+    return { grade: range.grade, passFail, percentage: range.minMarks };
   }
   const parsed = parseNumericDirectGrade(raw, format, totalMarks);
   if (!parsed.ok) return { grade: null, passFail: null, percentage: null };
@@ -121,7 +138,51 @@ function effectiveFromDirect(
     }
   }
 
-  return { grade: String(clamped), passFail: null, percentage };
+  // Pass/fail verdict on the *raw* value (CGPA 0–10, Marks out of
+  // totalMarks), not the normalized percentage. The percentage is for
+  // display only; the pass threshold lives on the raw input scale.
+  const passFail: PassFail = isPassingBand(clamped, gradeScale, totalMarks)
+    ? "pass"
+    : "fail";
+
+  return { grade: String(clamped), passFail, percentage };
+}
+
+/**
+ * Convert the engine's 0–100 percentage into a label in the assignment's
+ * native grade format. Used for rubric-graded submissions where the
+ * engine produced a percentage but the user wants to see the result in
+ * CGPA / Marks / Percentage / Complete-Incomplete form.
+ *
+ * - `Percentage` → keep one decimal place and append `%` (matches the
+ *   engine's own formatting so the displayed value is stable).
+ * - `CGPA` → divide by 10 (engine is 0–100, CGPA is 0–10).
+ * - `Marks` → multiply by totalMarks / 100.
+ * - `Comp/Incomp` → map to "Complete" / "Incomplete" using the scale's
+ *   `completeMin` threshold (default 51, so anything ≥ 51 is Complete).
+ * - Anything else (NamedBand, gs_*) → return null; those formats are
+ *   scale-driven and shouldn't be reverse-engineered from a raw
+ *   percentage.
+ */
+function enginePercentageToNative(
+  enginePct: number | null,
+  format: DirectGradeFormat,
+  totalMarks: number | null,
+  gradeScale: GradeScale | null,
+): string | null {
+  if (enginePct == null) return null;
+  if (format === "Percentage") return `${enginePct.toFixed(1)}%`;
+  if (format === "CGPA") return (enginePct / 10).toFixed(1);
+  if (format === "Marks" && totalMarks != null && totalMarks > 0) {
+    return ((enginePct / 100) * totalMarks).toFixed(1);
+  }
+  if (format === "Comp/Incomp") {
+    const completeMin = gradeScale?.configuration?.completeMin ?? 51;
+    const completeLabel = gradeScale?.configuration?.completeLabel ?? "Complete";
+    const incompleteLabel = gradeScale?.configuration?.incompleteLabel ?? "Incomplete";
+    return enginePct >= completeMin ? completeLabel : incompleteLabel;
+  }
+  return null;
 }
 
 export function deriveEvaluation(input: DeriveInput): DerivedEvaluation {
@@ -159,6 +220,7 @@ export function deriveEvaluation(input: DeriveInput): DerivedEvaluation {
         submission.gradeType,
         draft.directGrade,
         submission.totalMarks,
+        gradeScale,
       );
       percentage = direct.percentage;
     }
@@ -167,10 +229,41 @@ export function deriveEvaluation(input: DeriveInput): DerivedEvaluation {
       submission.gradeType,
       draft.directGrade,
       submission.totalMarks,
+      gradeScale,
     );
-    effectiveGrade = direct.grade;
-    passFail = direct.passFail;
-    percentage = direct.percentage;
+    // Direct grade wins when the evaluator entered one — either a
+    // numeric value (percentage != null) or a non-numeric verdict
+    // like Comp/Incomp ("Complete" / "Incomplete") which has grade
+    // set but no percentage. Empty input falls through to the engine
+    // path so rubric-graded submissions keep their computed value.
+    if (direct.grade != null) {
+      effectiveGrade = direct.grade;
+      passFail = direct.passFail;
+      if (direct.percentage != null) percentage = direct.percentage;
+    } else {
+      // Engine ran (rubric-graded submission) but the user wants the
+      // result in the assignment's native format. For numeric formats
+      // (Percentage / CGPA / Marks) and Comp/Incomp, convert the
+      // engine's 0–100 percentage into the native label. For
+      // scale-driven formats (gs_letter, gs_performance) the engine
+      // already resolved the band label — use it directly.
+      if (
+        submission.gradeType === "Percentage" ||
+        submission.gradeType === "CGPA" ||
+        submission.gradeType === "Marks" ||
+        submission.gradeType === "Comp/Incomp"
+      ) {
+        effectiveGrade = enginePercentageToNative(
+          engine?.percentage ?? null,
+          submission.gradeType,
+          submission.totalMarks,
+          gradeScale,
+        );
+      } else {
+        effectiveGrade = engineResult.grade;
+      }
+      passFail = engineResult.passFail;
+    }
   } else {
     effectiveGrade = engineResult.grade;
     passFail = engineResult.passFail;

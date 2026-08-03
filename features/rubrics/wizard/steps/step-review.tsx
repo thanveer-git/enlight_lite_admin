@@ -7,11 +7,11 @@ import { CheckCircle2, ChevronDown, ChevronUp, Edit3, FileText, TriangleAlert } 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { findGradeScale } from "@/features/rubrics/constants";
-import { GradeSimulator } from "@/features/rubrics/simulator/grade-simulator";
+import { GetJsonButton, GradeSimulator } from "@/features/rubrics/simulator/grade-simulator";
 import { cn } from "@/lib/utils";
 import type { RubricDraft } from "@/features/rubrics/wizard/types";
 import { type ValidationStep, getRubricValidation } from "@/features/rubrics/wizard/validation";
-import type { GradeProfileRule, LevelPoints, ProfilePath, RubricMatrix } from "@/types/rubric";
+import type { GradeProfileRule, LevelPoints, ProfilePath, RubricDetail, RubricMatrix } from "@/types/rubric";
 
 export interface StepReviewProps {
   draft: RubricDraft;
@@ -125,13 +125,34 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
   const cellStats = describeMatrix(matrix);
   const [outcomeExpanded, setOutcomeExpanded] = useState(false);
 
+  const debugDetail: RubricDetail = useMemo(
+    () => ({
+      id: "rb_xxx",
+      name: draft.name,
+      description: "",
+      outcome: draft.outcome,
+      status: "draft",
+      type: draft.type ?? "scored",
+      criteriaCount: matrix.criteria.length,
+      levelsCount: matrix.levels.length,
+      usedBy: 0,
+      updatedAt: new Date().toISOString(),
+      createdBy: "Thanveer Ahmed",
+      matrix,
+    }),
+    [draft, matrix],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <ValidationSummary blockers={blockers} warnings={warnings} onJumpToStep={onJumpToStep} />
         </div>
-        <GradeSimulator embedded matrix={matrix} rubricType={draft.type} rubricName={draft.name} />
+        <div className="flex flex-wrap items-center gap-2">
+          <GradeSimulator embedded matrix={matrix} rubricType={draft.type} rubricName={draft.name} />
+          <GetJsonButton detail={debugDetail} />
+        </div>
       </div>
 
       <Section title="Identity" step="info" onEdit={() => onJumpToStep("info")}>

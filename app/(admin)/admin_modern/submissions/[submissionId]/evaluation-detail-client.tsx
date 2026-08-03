@@ -93,10 +93,9 @@ export function EvaluationDetailClient({
   const headerActions = (
     <div className="flex items-center gap-2">
       <Button
-        variant="secondary"
+        variant="default"
         size="sm"
         asChild
-        className="rounded-xl"
         disabled={!prev}
       >
         {prev ? (
@@ -112,10 +111,9 @@ export function EvaluationDetailClient({
         )}
       </Button>
       <Button
-        variant="secondary"
+        variant="default"
         size="sm"
         asChild
-        className="rounded-xl"
         disabled={!next}
       >
         {next ? (
@@ -135,10 +133,9 @@ export function EvaluationDetailClient({
 
   const pageTitle = (
     <Button
-      variant="outline"
+      variant="default"
       size="sm"
       asChild
-      className="rounded-xl"
     >
       <Link href={ROUTES.admin.submissions.list}>
         <ArrowLeft className="mr-1.5 size-4" />
@@ -153,6 +150,7 @@ export function EvaluationDetailClient({
       rubricName={rubric?.name ?? null}
       totalMarks={liveSubmission.totalMarks}
       gradeFormat={liveSubmission.gradeType}
+      gradeScale={gradeScale}
       scorePercent={derived.percentage ?? derived.engine?.percentage ?? null}
       passFail={derived.passFail}
       effectiveGrade={derived.effectiveGrade}

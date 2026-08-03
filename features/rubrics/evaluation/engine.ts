@@ -68,7 +68,7 @@ function buildPartialCriteria(
 }
 
 export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
-  const { rubric, rubricType, ratings, gradeScale } = input;
+  const { rubric, rubricType, ratings, gradeScale, totalMarks } = input;
   const explanation: string[] = [];
 
   const criteria = rubric.criteria;
@@ -174,7 +174,16 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
     }
   } else {
     matchedRule = matchProfileRule(rubric, levels, ratings, explanation);
-    if (!matchedRule) {
+    if (matchedRule && rubricType === "scored") {
+      const ws = computeWeightedScore(criteria, ratings, levels, explanation);
+      criteriaEvals = ws.criteria;
+      weightedScore = ws.weightedScore;
+      weightedMax = ws.weightedMax;
+      percentage = ws.percentage;
+      if (percentage != null) {
+        scaleBand = findScaleBand(percentage, gradeScale, explanation);
+      }
+    } else if (!matchedRule) {
       if (rubric.profileFallback) {
         if (rubricType === "scored") {
           explanation.push(
@@ -201,8 +210,27 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
 
   const minPass = evaluateMinPass(rubric, levels, ratings, explanation);
 
+  // The rubric's Minimum Pass Level only fires for letter-grading
+  // scales that have pass bands configured. For other grade types
+  // (Percentage, CGPA, Marks, Comp/Incomp) the per-criterion rule
+  // doesn't apply — the verdict comes from the final score against
+  // the scale's own threshold (passMark, completeMin, etc.).
+  const isLetterGrading =
+    gradeScale?.meta?.gradeType === "letter_grading";
+  const hasPassBandsEnabled =
+    (gradeScale?.passBands?.length ?? 0) > 0;
+  const minPassApplies = isLetterGrading && hasPassBandsEnabled;
+
+  // For Comp/Incomp the verdict is purely a function of the final
+  // percentage vs. the scale's `completeMin` threshold. The per-
+  // criterion min-pass override doesn't apply — a 51.5% score should
+  // be "Complete" even if one criterion fell below the rubric's
+  // declared min-pass level.
+  const isCompIncomp =
+    gradeScale?.configuration?.completeMin != null;
+
   let minPassOverride: EvaluationResult["minPassOverride"] = null;
-  if (minPass.status === "failed") {
+  if (minPass.status === "failed" && minPassApplies) {
     const lowestFailing = findLowestFailingBand(gradeScale);
     if (lowestFailing) {
       minPassOverride = { band: lowestFailing, reason: "resubmit" };
@@ -220,9 +248,28 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
   let passFail: "pass" | "fail" | null = null;
   let requiresManualOverride = false;
 
-  if (minPassOverride) {
+  // For Comp/Incomp, derive the verdict from the percentage vs.
+  // `completeMin`. The min-pass override is skipped above, so we
+  // reach this branch with the original `finalGrade` from the
+  // matched rule / scale band / raw percentage path. Re-label it
+  // using the scale's complete/incomplete labels.
+  if (isCompIncomp && percentage != null) {
+    const completeMin = gradeScale!.configuration!.completeMin!;
+    const completeLabel = gradeScale!.configuration!.completeLabel ?? "Complete";
+    const incompleteLabel = gradeScale!.configuration!.incompleteLabel ?? "Incomplete";
+    finalGrade = percentage >= completeMin ? completeLabel : incompleteLabel;
+    passFail = percentage >= completeMin ? "pass" : "fail";
+    explanation.push(
+      `Result is ${finalGrade} — percentage ${percentage.toFixed(1)}% ${percentage >= completeMin ? "≥" : "<"} completeMin (${completeMin}).`,
+    );
+  } else if (minPassOverride) {
     finalGrade = minPassOverride.band.grade;
     passFail = "fail";
+    // Reflect the fail band in the gauge: percentage, letter grade,
+    // and pass/fail all come from the override band so the display
+    // is consistent with the override verdict.
+    percentage = minPassOverride.band.minMarks;
+    scaleBand = minPassOverride.band;
   } else if (minPass.status === "failed") {
     // Min-pass failed but no failing band exists in the scale.
     // Mark as Fail while preserving the calculated score for display.
@@ -230,15 +277,24 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
     passFail = "fail";
   } else if (matchedRule) {
     finalGrade = matchedRule.gradeLabel;
-    if (scaleBand) {
-      passFail = isPassingBand(scaleBand, gradeScale) ? "pass" : "fail";
+    // Grade Profile resolution: the matched label is a band name from
+    // the grade scale. Evaluate pass/fail against that band the same
+    // way direct grades do — without this, profile-matched grades
+    // (e.g. "B" matched via a rule on gs_letter) leave passFail null.
+    const profileBand =
+      gradeScale?.ranges?.find((b) => b.grade === matchedRule!.gradeLabel) ??
+      null;
+    if (profileBand) {
+      passFail = isPassingBand(profileBand, gradeScale, totalMarks) ? "pass" : "fail";
+    } else if (scaleBand) {
+      passFail = isPassingBand(scaleBand, gradeScale, totalMarks) ? "pass" : "fail";
     }
   } else if (scaleBand) {
     finalGrade = scaleBand.grade;
-    passFail = isPassingBand(scaleBand, gradeScale) ? "pass" : "fail";
+    passFail = isPassingBand(scaleBand, gradeScale, totalMarks) ? "pass" : "fail";
   } else if (percentage != null) {
     finalGrade = `${percentage.toFixed(1)}%`;
-    passFail = isPassingBand(percentage, gradeScale) ? "pass" : "fail";
+    passFail = isPassingBand(percentage, gradeScale, totalMarks) ? "pass" : "fail";
   } else {
     requiresManualOverride = true;
   }
