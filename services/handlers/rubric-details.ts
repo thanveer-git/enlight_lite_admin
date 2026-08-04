@@ -405,9 +405,9 @@ const combo1Matrix: RubricMatrix = weighted(
   ],
   [
     { id: "l-excellent", name: "Excellent", type: "single", value: 4 },
-    { id: "l-proficient", name: "Proficient", type: "range", min: 3, max: 3.9 },
-    { id: "l-developing", name: "Developing", type: "range", min: 2, max: 2.9 },
-    { id: "l-emerging", name: "Emerging", type: "range", min: 1, max: 1.9 },
+    { id: "l-proficient", name: "Proficient", type: "single", value: 3 },
+    { id: "l-developing", name: "Developing", type: "single", value: 2 },
+    { id: "l-emerging", name: "Emerging", type: "single", value: 1 },
   ],
   nest({
     "c-thesis|l-excellent": "Thesis is original, precise, and convincingly argued.",
@@ -434,10 +434,10 @@ const combo2Matrix: RubricMatrix = weighted(
     { id: "c-discussion", name: "Discussion & Error Analysis", weight: 2 },
   ],
   [
-    { id: "l-excellent", name: "Excellent", type: "single", value: 4 },
-    { id: "l-proficient", name: "Proficient", type: "single", value: 3 },
-    { id: "l-developing", name: "Developing", type: "range", min: 1.5, max: 2.5 },
-    { id: "l-emerging", name: "Emerging", type: "range", min: 0.5, max: 1.4 },
+    { id: "l-excellent", name: "Excellent", type: "range", min: 76, max: 100 },
+    { id: "l-proficient", name: "Proficient", type: "range", min: 51, max: 75 },
+    { id: "l-developing", name: "Developing", type: "range", min: 26, max: 50 },
+    { id: "l-emerging", name: "Emerging", type: "range", min: 0, max: 25 },
   ],
   nest({
     "c-hypothesis|l-excellent": "Hypothesis is specific, testable, and grounded.",
@@ -474,9 +474,9 @@ function gradeProfileMatrix(
     criteria: criteria.map((c) => ({ id: c.id, name: c.name, weight: c.weight })),
     levels: [
       { id: "l-excellent", name: "Excellent", points: { type: "single", value: 4, min: null, max: null } },
-      { id: "l-proficient", name: "Proficient", points: { type: "range", value: null, min: 3, max: 3.9 } },
-      { id: "l-developing", name: "Developing", points: { type: "range", value: null, min: 2, max: 2.9 } },
-      { id: "l-emerging", name: "Emerging", points: { type: "range", value: null, min: 1, max: 1.9 } },
+      { id: "l-proficient", name: "Proficient", points: { type: "single", value: 3, min: null, max: null } },
+      { id: "l-developing", name: "Developing", points: { type: "single", value: 2, min: null, max: null } },
+      { id: "l-emerging", name: "Emerging", points: { type: "single", value: 1, min: null, max: null } },
     ],
     descriptions,
     gradingMethod: "grade_profile",
@@ -683,6 +683,43 @@ const combo6Matrix: RubricMatrix = gradeProfileMatrix(
   letterScaleId,
 );
 
+// Combo 8 — Unscored · No Grade Profile. The engine reports
+// `requiresManualOverride: true` whenever this combination is loaded:
+// there is no points-based grade and no rule-based grade, so the
+// evaluator must enter the final grade themselves.
+const combo8Matrix: RubricMatrix = {
+  criteria: [
+    { id: "c-participation", name: "Class Participation & Engagement", weight: null },
+    { id: "c-preparation", name: "Reading Preparation & Reflection", weight: null },
+    { id: "c-collaboration", name: "Peer Collaboration & Discussion Quality", weight: null },
+    { id: "c-attendance", name: "Consistent Attendance & Punctuality", weight: null },
+  ],
+  levels: [
+    { id: "l-strong", name: "Strong", points: null },
+    { id: "l-adequate", name: "Adequate", points: null },
+    { id: "l-needs-work", name: "Needs Work", points: null },
+  ],
+  descriptions: nest({
+    "c-participation|l-strong": "Engages actively in every session; raises the quality of discussion.",
+    "c-participation|l-adequate": "Participates reliably; contributions are usually on-topic.",
+    "c-participation|l-needs-work": "Rarely participates; engagement is inconsistent.",
+    "c-preparation|l-strong": "Reads carefully and brings specific references into discussion.",
+    "c-preparation|l-adequate": "Completes readings; reflections are mostly substantive.",
+    "c-preparation|l-needs-work": "Preparation is uneven or surface-level.",
+    "c-collaboration|l-strong": "Builds on peers' ideas and invites quieter voices in.",
+    "c-collaboration|l-adequate": "Collaborates well with regular partners.",
+    "c-collaboration|l-needs-work": "Struggles to collaborate; tends to work in isolation.",
+    "c-attendance|l-strong": "Attends every session and arrives prepared.",
+    "c-attendance|l-adequate": "Attendance is consistent with rare absences.",
+    "c-attendance|l-needs-work": "Attendance is inconsistent or late.",
+  }),
+  gradingMethod: "weighted_average",
+  profileRules: [],
+  profileFallback: false,
+  minPassLevelId: null,
+  suggestedScaleId: performanceScaleId,
+};
+
 const combo7Matrix: RubricMatrix = {
   criteria: [
     { id: "c-content", name: "Content Mastery & Message Clarity", weight: null },
@@ -709,7 +746,7 @@ const combo7Matrix: RubricMatrix = {
   profileRules: [
     {
       id: "pr-effective",
-      gradeLabel: "Effective",
+      gradeLabel: "Excellent",
       paths: [
         {
           tiers: [{ count: 3, levelId: "l-effective" }],
@@ -726,7 +763,7 @@ const combo7Matrix: RubricMatrix = {
     },
     {
       id: "pr-adequate",
-      gradeLabel: "Adequate",
+      gradeLabel: "Good",
       paths: [
         {
           tiers: [{ count: 2, levelId: "l-adequate" }],
@@ -853,5 +890,21 @@ export const FAKE_RUBRIC_DETAILS: Record<string, RubricDetail> = {
     updatedAt: "2026-08-01T08:30:00Z",
     createdBy: "Thanveer Ahmed",
     matrix: combo7Matrix,
+  },
+  rb_0061: {
+    id: "rb_0061",
+    name: "Combo 8 – Unscored · No Grade Profile",
+    description:
+      "Unscored rubric with Weighted Average grading and no Grade Profile. The engine has no points to score and no rules to match, so the evaluator must enter the final grade manually (Manual Override).",
+    outcome:
+      "<p>Students are observed across participation, preparation, collaboration, and attendance; the final grade is set by the instructor since no points or profile rules are defined.</p>",
+    status: "published",
+    type: "unscored",
+    criteriaCount: 4,
+    levelsCount: 3,
+    usedBy: 0,
+    updatedAt: "2026-08-04T09:00:00Z",
+    createdBy: "Thanveer Ahmed",
+    matrix: combo8Matrix,
   },
 };

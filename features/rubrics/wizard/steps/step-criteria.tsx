@@ -115,6 +115,13 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseInteger(value: string): number | null {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return null;
+  return parsed;
+}
+
 function getPointBounds(points: LevelPoints | null): [number, number] | null {
   if (!points) return null;
   if (points.type === "single") {
@@ -633,12 +640,14 @@ function LevelPointsEditor({ points, hasError, onChange }: LevelPointsEditorProp
       {points.type === "single" ? (
         <Input
           type="number"
-          step="any"
+          step="1"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={points.value ?? ""}
           aria-label="Point value"
           aria-invalid={hasError}
           className={cn("h-8 bg-background text-sm", hasError && "border-destructive")}
-          onChange={(event) => onChange(singlePoints(parseNumber(event.target.value)))}
+          onChange={(event) => onChange(singlePoints(parseInteger(event.target.value)))}
         />
       ) : (
         <AnimatedRangeInputs
@@ -680,23 +689,27 @@ function AnimatedRangeInputs({
     >
       <Input
         type="number"
-        step="any"
+        step="1"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={min ?? ""}
         placeholder="Min"
         aria-label="Minimum points"
         aria-invalid={hasError}
         className={cn("h-8 bg-background text-sm", hasError && "border-destructive")}
-        onChange={(event) => onMinChange(parseNumber(event.target.value))}
+        onChange={(event) => onMinChange(parseInteger(event.target.value))}
       />
       <Input
         type="number"
-        step="any"
+        step="1"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={max ?? ""}
         placeholder="Max"
         aria-label="Maximum points"
         aria-invalid={hasError}
         className={cn("h-8 bg-background text-sm", hasError && "border-destructive")}
-        onChange={(event) => onMaxChange(parseNumber(event.target.value))}
+        onChange={(event) => onMaxChange(parseInteger(event.target.value))}
       />
     </div>
   );

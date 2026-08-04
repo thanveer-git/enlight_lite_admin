@@ -169,36 +169,12 @@ function getScoreBounds(matrix: RubricMatrix): { min: number; max: number } | nu
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
-const SLIDER_TRACK_COLOR = "#334155";
-
-function buildSliderSegments(
-  matrix: RubricMatrix,
-  bounds: { min: number; max: number } | null,
-  _selectedLevelId: string,
-) {
-  if (!bounds || bounds.max <= bounds.min) return [];
-
-  return matrix.levels
-    .map((level) => {
-      const range = getLevelRange(level.id, matrix);
-      const single = getLevelPointsSingle(level.id, matrix);
-      const from = range?.min ?? single;
-      const to = range?.max ?? single;
-      if (from == null || to == null || to <= from) return null;
-      const clampedFrom = Math.max(bounds.min, from);
-      const clampedTo = Math.min(bounds.max, to);
-      if (clampedTo <= clampedFrom) return null;
-      return {
-        from: clampedFrom,
-        to: clampedTo,
-        label: level.name,
-      };
-    })
-    .filter((s): s is { from: number; to: number; label: string } => s != null)
-    .map((seg) => ({
-      ...seg,
-      color: SLIDER_TRACK_COLOR,
-    }));
+// Rounds to one decimal place and strips a trailing ".0" so whole
+// numbers display as "7" instead of "7.0".
+function fmtSimulatorPoints(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
 function getWeightedContribution(
@@ -294,6 +270,11 @@ export function GradeSimulator({
   const rubricType = activeRubric?.rubricType ?? embeddedRubricType ?? null;
 
   const [ratings, setRatings] = useState<RatingState>(() => buildInitialRatings(matrix));
+  // Per-criterion local drag position so the slider thumb tracks the
+  // cursor smoothly across level gaps without writing to the store on
+  // every tick. Cleared on release (commit) so the next render falls
+  // back to the stored value.
+  const [dragPositions, setDragPositions] = useState<Record<string, number>>({});
 
   const suggestedScaleId = matrix.suggestedScaleId ?? "";
   const [selectedScaleId, setSelectedScaleId] = useState<string>(suggestedScaleId);
@@ -364,6 +345,7 @@ export function GradeSimulator({
     if (open && !wasOpen) {
       setRatings(buildInitialRatings(matrix));
       setSelectedScaleId(matrix.suggestedScaleId ?? "");
+      setDragPositions({});
       setPhase("configure");
     }
   }, [open, matrix]);
@@ -376,6 +358,7 @@ export function GradeSimulator({
   const resetRatings = () => {
     setRatings(buildInitialRatings(matrix));
     setSelectedScaleId(matrix.suggestedScaleId ?? "");
+    setDragPositions({});
     setPhase("configure");
   };
 
@@ -489,9 +472,13 @@ export function GradeSimulator({
                       const scoreBounds = getScoreBounds(matrix);
                       const sliderMin = scoreBounds?.min ?? 0;
                       const sliderMax = scoreBounds?.max ?? 0;
-                      const sliderValue = current?.points ?? sliderMin;
-                      const step = 0.1;
-                      const sliderSegments = buildSliderSegments(matrix, scoreBounds, selectedLevelId);
+                      // Prefer the live drag position over the stored
+                      // value while the user is mid-drag, so the thumb
+                      // tracks the cursor smoothly without forcing a
+                      // store write per tick.
+                      const dragPos = dragPositions[criterion.id];
+                      const sliderValue = dragPos ?? current?.points ?? sliderMin;
+                      const step = 1;
                       return (
                         <li
                           key={criterion.id}
@@ -540,14 +527,36 @@ export function GradeSimulator({
                                       max={sliderMax}
                                       step={step}
                                       value={[sliderValue]}
-                                      onValueChange={(values) =>
-                                        setPoints(criterion.id, values[0] ?? sliderMin)
-                                      }
+                                      onValueChange={(values) => {
+                                        // Live preview only — no store
+                                        // write. Releases the per-render
+                                        // re-render cascade the previous
+                                        // implementation hit on every
+                                        // tick.
+                                        setDragPositions((prev) => ({
+                                          ...prev,
+                                          [criterion.id]: values[0] ?? sliderMin,
+                                        }));
+                                      }}
+                                      onValueCommit={(values) => {
+                                        const v = values[0] ?? sliderMin;
+                                        // Commit clears the draft so the
+                                        // next render falls back to the
+                                        // stored value.
+                                        setDragPositions((prev) => {
+                                          const next = { ...prev };
+                                          delete next[criterion.id];
+                                          return next;
+                                        });
+                                        setPoints(criterion.id, v);
+                                      }}
                                       aria-label={`${criterion.name} points`}
-                                      className="flex-1 [&_.bg-muted]:!bg-slate-300 dark:[&_.bg-muted]:!bg-slate-600 [&_.bg-transparent]:!bg-black"
+                                      className="flex-1"
+                                      trackClassName="!bg-slate-300 dark:!bg-slate-600"
+                                      fillClassName="!bg-black"
                                     />
                                     <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums text-foreground">
-                                      {(sliderValue ?? 0).toFixed(range ? 1 : 0)}
+                                      {fmtSimulatorPoints(sliderValue ?? 0)}
                                     </span>
                                   </div>
                                 </div>

@@ -171,8 +171,12 @@ function enginePercentageToNative(
   gradeScale: GradeScale | null,
 ): string | null {
   if (enginePct == null) return null;
-  if (format === "Percentage") return `${enginePct.toFixed(1)}%`;
-  if (format === "CGPA") return (enginePct / 10).toFixed(1);
+  if (format === "Percentage") {
+    return `${enginePct.toFixed(1)}%`;
+  }
+  if (format === "CGPA") {
+    return (enginePct / 10).toFixed(1);
+  }
   if (format === "Marks" && totalMarks != null && totalMarks > 0) {
     return ((enginePct / 100) * totalMarks).toFixed(1);
   }
@@ -267,6 +271,16 @@ export function deriveEvaluation(input: DeriveInput): DerivedEvaluation {
   } else {
     effectiveGrade = engineResult.grade;
     passFail = engineResult.passFail;
+  }
+
+  // For scale-driven Grade Profile matches (e.g. unscored rubric +
+  // gs_performance → "Excellent") the engine produces a band label but
+  // no percentage, since unscored rubrics carry no points. The hero
+  // gauge still needs a number to fill WaterFill — look up the band
+  // on the active grade scale and use its `minMarks` as a proxy.
+  if (percentage == null && effectiveGrade != null && gradeScale?.ranges?.length) {
+    const band = gradeScale.ranges.find((b) => b.grade === effectiveGrade);
+    if (band) percentage = band.minMarks;
   }
 
   // Completion: with min-pass failure, the override forces "open" unless

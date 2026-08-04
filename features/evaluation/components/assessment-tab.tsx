@@ -29,6 +29,13 @@ interface AssessmentTabProps {
   gradeScale: GradeScale | null;
   onRatingChange: (criterionId: string, levelId: string, points: number | null) => void;
   onDirectGradeChange: (value: string) => void;
+  /**
+   * Live 0–100 percentage from the direct-grade control. Surfaced to
+   * the hero card so the "Percentage:" chip tracks what the reviewer
+   * is currently typing/dragging, rather than the band-min the engine
+   * resolves to.
+   */
+  onLiveDirectPercentChange?: (percent: number | null) => void;
   onOverridePatch: (patch: Partial<EvaluationDraft["override"]>) => void;
   onMarkCompleteChange: (next: boolean) => void;
   onNotifyChange: (next: boolean) => void;
@@ -43,6 +50,7 @@ export function AssessmentTab({
   gradeScale,
   onRatingChange,
   onDirectGradeChange,
+  onLiveDirectPercentChange,
   onOverridePatch,
   onMarkCompleteChange,
   onNotifyChange,
@@ -105,6 +113,7 @@ export function AssessmentTab({
           value={draft.directGrade}
           locked={derived.rubricLocked}
           onChange={onDirectGradeChange}
+          onLivePercentChange={onLiveDirectPercentChange}
         />
       ) : (
         <EmptyState

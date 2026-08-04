@@ -393,9 +393,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
     gradeType: "gs_performance",
     gradeScaleId: "gs_performance",
     totalMarks: null,
-    currentStatus: "graded",
-    finalGrade: "Effective",
-    finalPercentage: 88,
+    currentStatus: "pending",
     attempts: [
       baseAttempt({
         attemptNumber: 1,
@@ -442,5 +440,36 @@ export const SEED_SUBMISSIONS: Submission[] = [
     viewingAttempt: 1,
     evaluatedAt: "2026-07-24T10:00:00Z",
     evaluatedBy: INSTRUCTOR,
+  },
+
+  // ── S13: Letter Grade Scale + Unscored rubric (rb_0061) — no profile ──
+  {
+    id: "sb_013",
+    assignmentId: "asg_013",
+    assignmentCode: "ASG-013",
+    assignmentTitle: "Seminar Participation — Module 4",
+    courseId: "crs_009",
+    courseName: "Advanced Seminar in Humanities",
+    assignmentBriefHtml:
+      "<p>Active participation across four seminar sessions, including reading preparation and peer discussion.</p>",
+    learner: u("u_004"),
+    rubricId: "rb_0061",
+    gradeType: "gs_letter",
+    gradeScaleId: "gs_letter",
+    totalMarks: null,
+    currentStatus: "pending",
+    attempts: [
+      baseAttempt({
+        attemptNumber: 1,
+        submittedAt: "2026-08-01T11:30:00Z",
+        dueAt: "2026-08-02T23:59:00Z",
+        wordCount: 0,
+        wordLimit: null,
+        bodyHtml: "<p>Seminar participation log submitted.</p>",
+      }),
+    ],
+    viewingAttempt: 1,
+    evaluatedAt: null,
+    evaluatedBy: null,
   },
 ];

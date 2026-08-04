@@ -1,101 +1,138 @@
 "use client"
 
 import * as React from "react"
-import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { cn } from "@/lib/utils"
 
-export interface SliderSegment {
-  /** Position 0..1 representing the share of the slider's [min,max] range. */
-  from: number
-  /** Position 0..1 representing the share of the slider's [min,max] range. */
-  to: number
-  /** CSS color (any value accepted by `background-color`). */
-  color: string
-  /** Optional accessible label, used for tooltips / aria-label on the segment. */
-  label?: string
-}
-
 export interface SliderProps
-  extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
+  /** Single value or single-element array. Two-thumb ranges are not supported. */
+  value?: number | number[]
+  onValueChange?: (values: number[]) => void
+  /** Fires once when the user releases the thumb (pointerup / keyup). */
+  onValueCommit?: (values: number[]) => void
+  trackClassName?: string
+  fillClassName?: string
   /**
-   * Optional color segments to render along the track.
-   * Each segment is clamped to [0,1] and rendered as a tinted bar.
+   * Optional list of valid zones, in the slider's own `min`/`max` units.
+   * Rendered as overlays on the track so users can see where the thumb
+   * is allowed to rest. The thumb is still mechanically draggable
+   * through gaps — `onValueCommit` (in the caller) is responsible for
+   * snapping to a valid zone.
    */
-  segments?: SliderSegment[]
-  /** Render faint boundary pins between segments. */
-  segmentPins?: boolean
+  validZones?: { min: number; max: number }[]
+  zoneClassName?: string
 }
 
-const Slider = React.forwardRef<
-  React.ElementRef<typeof SliderPrimitive.Root>,
-  SliderProps
->(({ className, segments, segmentPins, min = 0, max = 100, value, ...props }, ref) => {
-  const minVal = Number(min)
-  const maxVal = Number(max)
-  const span = maxVal - minVal || 1
-
-  const normalized = (segments ?? [])
-    .map((seg) => {
-      const start = Math.max(0, Math.min(1, (seg.from - minVal) / span))
-      const end = Math.max(0, Math.min(1, (seg.to - minVal) / span))
-      const left = Math.min(start, end)
-      const right = Math.max(start, end)
-      if (right <= left) return null
-      return { left, right, color: seg.color, label: seg.label }
-    })
-    .filter((s): s is { left: number; right: number; color: string; label: string | undefined } => s != null)
-
-  // Boundary positions between adjacent segments.
-  const pins: number[] = []
-  if (segmentPins && normalized.length > 1) {
-    for (let i = 1; i < normalized.length; i++) {
-      pins.push(normalized[i]!.left)
+export const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
+  (
+    {
+      className,
+      trackClassName,
+      fillClassName,
+      validZones,
+      zoneClassName,
+      value,
+      onValueChange,
+      onValueCommit,
+      min = 0,
+      max = 100,
+      step = 1,
+      disabled,
+      onPointerUp,
+      onKeyUp,
+      ...props
+    },
+    ref,
+  ) => {
+    const numeric = Array.isArray(value) ? (value[0] ?? Number(min)) : (value ?? Number(min))
+    const minVal = Number(min)
+    const maxVal = Number(max)
+    const span = maxVal - minVal || 1
+    const fillPct = Math.max(0, Math.min(100, ((numeric - minVal) / span) * 100))
+    const zoneStyle = (zone: { min: number; max: number }): React.CSSProperties => {
+      const left = Math.max(0, ((zone.min - minVal) / span) * 100)
+      const right = Math.max(0, ((maxVal - zone.max) / span) * 100)
+      // Single-point zones (min === max) collapse to 0 width; give them
+      // a minimum visible footprint so the user can see where the level
+      // sits. Centered on the value's percentage.
+      if (Math.abs(zone.max - zone.min) < 1e-9) {
+        const center = left
+        const half = 1.5
+        return {
+          left: `max(0px, calc(${center}% - ${half}%))`,
+          right: `max(0px, calc(${100 - center}% - ${half}%))`,
+        }
+      }
+      return { left: `${left}%`, right: `${right}%` }
     }
-  }
 
-  return (
-    <SliderPrimitive.Root
-      ref={ref}
-      className={cn(
-        "relative flex w-full touch-none select-none items-center",
-        className
-      )}
-      value={value}
-      min={min}
-      max={max}
-      {...props}
-    >
-      <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-muted">
-        {normalized.length > 0 ? (
-          <div className="absolute inset-0 flex" aria-hidden>
-            {normalized.map((seg, idx) => (
-              <div
-                key={idx}
-                className="h-full"
-                style={{
-                  width: `${(seg.right - seg.left) * 100}%`,
-                  backgroundColor: seg.color,
-                }}
-                title={seg.label}
-              />
-            ))}
-          </div>
-        ) : null}
-        <SliderPrimitive.Range className="absolute h-full bg-transparent" />
-      </SliderPrimitive.Track>
-      {pins.map((pos, idx) => (
-        <span
-          key={`pin-${idx}`}
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const next = e.target.valueAsNumber
+      onValueChange?.([Number.isFinite(next) ? next : minVal])
+    }
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLInputElement>) => {
+      onPointerUp?.(e)
+      if (disabled) return
+      const next = Number(e.currentTarget.value)
+      onValueCommit?.([Number.isFinite(next) ? next : minVal])
+    }
+
+    const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      onKeyUp?.(e)
+      if (disabled) return
+      const next = Number(e.currentTarget.value)
+      onValueCommit?.([Number.isFinite(next) ? next : minVal])
+    }
+
+    return (
+      <div className={cn("relative flex w-full touch-none select-none items-center", className)}>
+        <div
           aria-hidden
-          className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-foreground/30"
-          style={{ left: `${pos * 100}%` }}
+          className={cn(
+            "pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted",
+            trackClassName,
+          )}
         />
-      ))}
-      <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border border-primary/60 bg-background shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50" />
-    </SliderPrimitive.Root>
-  )
-})
-Slider.displayName = SliderPrimitive.Root.displayName
-
-export { Slider }
+        {validZones?.map((zone, i) => (
+          <div
+            key={i}
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full",
+              zoneClassName,
+            )}
+            style={zoneStyle(zone)}
+          />
+        ))}
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary",
+            fillClassName,
+          )}
+          style={{ width: `${fillPct}%` }}
+        />
+        <input
+          ref={ref}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={numeric}
+          disabled={disabled}
+          onChange={handleChange}
+          onPointerUp={handlePointerUp}
+          onKeyUp={handleKeyUp}
+          className={cn(
+            "slider-native relative z-10 h-5 w-full bg-transparent",
+            disabled && "cursor-not-allowed opacity-50",
+          )}
+          {...props}
+        />
+      </div>
+    )
+  },
+)
+Slider.displayName = "Slider"

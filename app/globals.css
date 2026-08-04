@@ -200,3 +200,62 @@
     font-size: 0.85em;
   }
 }
+
+/* Native range slider — replaces Radix Slider for smoother dragging.
+   Track and fill are drawn by the wrapper divs; this only styles the
+   input itself so the native thumb/track are visually consistent. */
+.slider-native {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.slider-native::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
+}
+.slider-native::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.slider-native::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--primary) / 0.6);
+  margin-top: -5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: grab;
+}
+.slider-native::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--primary) / 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: grab;
+}
+
+.slider-native:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+.slider-native:active::-moz-range-thumb {
+  cursor: grabbing;
+}
+
+.slider-native:focus-visible {
+  outline: none;
+}
+.slider-native:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px hsl(var(--ring)), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.slider-native:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px hsl(var(--ring)), 0 1px 2px rgba(0, 0, 0, 0.05);
+}

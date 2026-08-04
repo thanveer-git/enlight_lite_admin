@@ -32,6 +32,15 @@ interface DirectGradeRowProps {
   value: string;
   locked: boolean;
   onChange: (value: string) => void;
+  /**
+   * Live percentage as the user moves the slider / types in the
+   * numeric input. For named-band grading this is the slider's current
+   * 0–100 position; for numeric formats it's the parsed value clamped
+   * to range. The hero card uses this to render the "Percentage:"
+   * chip so it tracks the input the reviewer is interacting with
+   * rather than the band-min the engine resolves to.
+   */
+  onLivePercentChange?: (percent: number | null) => void;
 }
 
 interface NamedBandRowProps {
@@ -39,6 +48,7 @@ interface NamedBandRowProps {
   value: string;
   locked: boolean;
   onChange: (value: string) => void;
+  onLivePercentChange?: (percent: number | null) => void;
 }
 
 /**
@@ -48,7 +58,7 @@ interface NamedBandRowProps {
  * in lockstep, and any change snaps to a band so the dropdown label
  * is always consistent with the percentage.
  */
-function NamedBandRow({ gradeScale, value, locked, onChange }: NamedBandRowProps) {
+function NamedBandRow({ gradeScale, value, locked, onChange, onLivePercentChange }: NamedBandRowProps) {
   const inputId = useId();
   const bands = useMemo(() => bandsForNamedScale(gradeScale), [gradeScale]);
   const ranges = gradeScale?.ranges ?? [];
@@ -57,15 +67,14 @@ function NamedBandRow({ gradeScale, value, locked, onChange }: NamedBandRowProps
   const activeRange = activeBand
     ? ranges.find((r) => r.grade === activeBand) ?? null
     : null;
-  // When no band is selected, default the slider to the lowest band's
-  // midpoint rather than 0 — 0 isn't a meaningful position for any
-  // band and the thumb visually anchors somewhere sensible.
-  const defaultRange = ranges.length > 0 ? ranges[ranges.length - 1]! : null;
+  // When a band is selected, default the slider to that band's
+  // midpoint so the thumb starts somewhere inside the active range.
+  // When no band is selected, default to 0 to match the empty input —
+  // a non-zero thumb would falsely suggest a percentage was already
+  // entered.
   const bandCenter = activeRange
     ? (activeRange.minMarks + activeRange.maxMarks) / 2
-    : defaultRange
-      ? (defaultRange.minMarks + defaultRange.maxMarks) / 2
-      : 0;
+    : 0;
 
   // Local slider position so the thumb tracks the cursor smoothly while
   // dragging. The band label is only updated on release
@@ -77,6 +86,12 @@ function NamedBandRow({ gradeScale, value, locked, onChange }: NamedBandRowProps
     setSliderPos(bandCenter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBand]);
+  // Surface the live slider position to the parent so the hero card's
+  // "Percentage:" chip tracks the input the reviewer is dragging,
+  // rather than the band-min the engine resolves to.
+  useEffect(() => {
+    onLivePercentChange?.(sliderPos);
+  }, [sliderPos, onLivePercentChange]);
 
   const bandForPercent = (pct: number): string | null => {
     const r = ranges.find((b) => pct >= b.minMarks && pct <= b.maxMarks);
@@ -139,13 +154,13 @@ function NamedBandRow({ gradeScale, value, locked, onChange }: NamedBandRowProps
           <Slider
             min={0}
             max={100}
-            step={0.1}
+            step={1}
             value={[sliderPos]}
             onValueChange={handleSliderChange}
             onValueCommit={handleSliderCommit}
             disabled={locked}
             aria-label="Grade band percentage"
-            className="flex-1 [&_.bg-transparent]:!bg-primary"
+            className="flex-1"
           />
           <Input
             type="text"
@@ -171,8 +186,34 @@ export function DirectGradeRow({
   value,
   locked,
   onChange,
+  onLivePercentChange,
 }: DirectGradeRowProps) {
   const inputId = useId();
+
+  // Compute the live 0–100 percentage for the hero card's
+  // "Percentage:" chip. `null` for Comp/Incomp (no percentage) and
+  // for any empty / unparseable numeric input. For named-band grading
+  // the slider position is owned by `NamedBandRow` (which calls
+  // `onLivePercentChange` directly), so we just publish `null` from
+  // this branch to clear any stale value.
+  const isNamedBand = format === "NamedBand" || format.startsWith("gs_");
+  const parsed = isNamedBand || format === "Comp/Incomp"
+    ? null
+    : parseNumericDirectGrade(value, format, totalMarks);
+  const livePercent: number | null = (() => {
+    if (format === "Comp/Incomp" || isNamedBand) return null;
+    if (!parsed || !parsed.ok) return null;
+    const clamped = clampDirectGrade(parsed.value, format, totalMarks);
+    if (format === "Percentage") return clamped;
+    if (format === "CGPA") return (clamped / 10) * 100;
+    if (format === "Marks" && totalMarks != null && totalMarks > 0) {
+      return (clamped / totalMarks) * 100;
+    }
+    return null;
+  })();
+  useEffect(() => {
+    onLivePercentChange?.(livePercent);
+  }, [livePercent, onLivePercentChange]);
 
   if (format === "Comp/Incomp") {
     const valid = value === "Complete" || value === "Incomplete" ? value : undefined;
@@ -194,20 +235,20 @@ export function DirectGradeRow({
     );
   }
 
-  if (format === "NamedBand" || format.startsWith("gs_")) {
+  if (isNamedBand) {
     return (
       <NamedBandRow
         gradeScale={gradeScale}
         value={value}
         locked={locked}
         onChange={onChange}
+        onLivePercentChange={onLivePercentChange}
       />
     );
   }
 
   const range = rangeFor(format, totalMarks);
-  const parsed = parseNumericDirectGrade(value, format, totalMarks);
-  const display = value.endsWith(".") ? value : String(parsed.ok ? parsed.value : Number(value) || 0);
+  const display = value.endsWith(".") ? value : String(parsed && parsed.ok ? parsed.value : Number(value) || 0);
 
   // Format-specific label and unit suffix.
   const formatLabel: Record<Exclude<DirectGradeFormat, "Comp/Incomp" | "NamedBand">, string> = {

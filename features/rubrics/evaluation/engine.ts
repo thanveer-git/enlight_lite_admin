@@ -365,12 +365,12 @@ export function computeWeightedScore(
   }
 
   const percentage = weightedMax > 0 ? (weightedScore / weightedMax) * 100 : null;
-  if (percentage != null && rubricMaximumPoints != null) {
-    const normalizedScore = weightedScore / rubricMaximumPoints;
-    const normalizedMax = weightedMax / rubricMaximumPoints;
-    explanation.push(
-      `Weighted score: ${normalizedScore.toFixed(2)} out of ${normalizedMax.toFixed(2)} (${percentage.toFixed(2)}%).`,
-    );
+  // The "How this was calculated" card builds its own structured
+  // per-criterion breakdown from `out`, so the engine no longer pushes
+  // prose lines for each row. Keep the totals line for the narrative
+  // summary shown elsewhere (and for debug purposes).
+  if (percentage != null) {
+    explanation.push(`Weighted score: ${weightedScore.toFixed(2)} / ${weightedMax.toFixed(2)} (${percentage.toFixed(2)}%).`);
   }
   return { criteria: out, weightedScore, weightedMax, percentage };
 }

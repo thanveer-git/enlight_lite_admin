@@ -118,7 +118,7 @@ export const GRADE_SCALES: GradeScale[] = [
     configuration: {
       min: 0,
       max: 100,
-      passMark: 14,
+      passMark: 25,
       step: 0.01,
     },
     meta: {
@@ -135,7 +135,7 @@ export const GRADE_SCALES: GradeScale[] = [
     configuration: {
       min: 0,
       max: 10,
-      passMark: 4,
+      passMark: 5,
       step: 0.01,
     },
     meta: {

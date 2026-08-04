@@ -116,9 +116,9 @@ export function Notifications() {
           aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
           className="relative"
         >
-          <Bell className="size-5" />
+          <Bell className="size-4" />
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold leading-none text-destructive-foreground ring-2 ring-background">
+            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground ring-2 ring-background">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

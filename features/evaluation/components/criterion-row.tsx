@@ -13,7 +13,7 @@
  * slider and numeric input share a row below, with the description
  * underneath. Mirrors the screenshot in §4.8 of the prototype doc.
  */
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Award, CheckCircle2, Quote, XCircle } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -109,6 +109,15 @@ function getScoreBounds(matrix: RubricMatrix): { min: number; max: number } | nu
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
+// Rounds to one decimal place and strips a trailing ".0" so whole
+// numbers display as "7" instead of "7.0". Mirroring this back into the
+// input mid-edit would otherwise move the caret to the end.
+function fmtPoints(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
 /**
  * Tailwind classes for the coloured dot rendered next to each level
  * name. Levels are ordered best→worst in the matrix, so a top-down
@@ -192,67 +201,24 @@ export function CriterionRow({
     onRatingChange(id, nextPoints);
   };
 
-  const handlePointsChange = (raw: string) => {
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return;
-    const bounds = getScoreBounds(matrix);
-    const clamped = bounds ? Math.min(bounds.max, Math.max(bounds.min, n)) : n;
-    const nextLevel = getLevelForPoints(clamped, matrix);
-    const nextRange = getLevelRange(nextLevel, matrix);
-    const nextSingle = !nextRange ? getLevelPointsSingle(nextLevel, matrix) : null;
-    let nextPoints = clamped;
-    if (nextRange) {
-      nextPoints = Math.min(nextRange.max, Math.max(nextRange.min, clamped));
-    } else if (nextSingle != null) {
-      nextPoints = nextSingle;
-    }
-    onRatingChange(nextLevel, nextPoints);
-  };
-
-  const slider = (() => {
-    if (!scored) return null;
-    const bounds = getScoreBounds(matrix);
-    if (!bounds) return null;
-    const range = getLevelRange(levelId, matrix);
-    const sliderValue = points ?? bounds.min;
-    return (
-      <div className="flex items-center gap-3 rounded-md bg-muted/30 px-2.5 py-2">
-        <Slider
-          id={`criterion-${criterion.id}-slider`}
-          min={bounds.min}
-          max={bounds.max}
-          step={0.1}
-          value={[sliderValue]}
-          onValueChange={(values) => {
-            const v = values[0] ?? bounds.min;
-            const derived = getLevelForPoints(v, matrix);
-            const nextRange = getLevelRange(derived, matrix);
-            const nextSingle = !nextRange ? getLevelPointsSingle(derived, matrix) : null;
-            let nextPoints = v;
-            if (nextRange) {
-              nextPoints = Math.min(nextRange.max, Math.max(nextRange.min, v));
-            } else if (nextSingle != null) {
-              nextPoints = nextSingle;
-            }
-            onRatingChange(derived, nextPoints);
-          }}
-          aria-labelledby={pointsLabelId}
-          className="flex-1 [&_.bg-transparent]:!bg-primary"
-          disabled={locked}
-        />
-        <Input
-          id={`criterion-${criterion.id}-points`}
-          type="text"
-          inputMode="decimal"
-          value={Number.isFinite(points) ? (points ?? 0) : 0}
-          onChange={(e) => handlePointsChange(e.target.value)}
-          aria-labelledby={pointsLabelId}
-          disabled={locked}
-          className="h-9 w-14 text-center tabular-nums"
-        />
-      </div>
-    );
-  })();
+  const slider = !scored
+    ? null
+    : (() => {
+        const bounds = getScoreBounds(matrix);
+        if (!bounds) return null;
+        return (
+          <PointsSliderInput
+            criterionId={criterion.id}
+            matrix={matrix}
+            levelId={levelId}
+            points={points}
+            bounds={bounds}
+            locked={locked}
+            ariaLabelledBy={pointsLabelId}
+            onRatingChange={onRatingChange}
+          />
+        );
+      })();
 
   return (
     <li
@@ -374,5 +340,154 @@ export function CriterionRow({
         </p>
       )}
     </li>
+  );
+}
+
+interface PointsSliderInputProps {
+  criterionId: string;
+  matrix: RubricMatrix;
+  levelId: string;
+  points: number | null;
+  bounds: { min: number; max: number };
+  locked: boolean;
+  ariaLabelledBy: string;
+  onRatingChange: (levelId: string, points: number | null) => void;
+}
+
+/**
+ * Paired slider + numeric input for a criterion's points. Implements
+ * the spec's two-layer model (`range-slider-logic.md`):
+ *   • Live drag and live typing mirror across the two controls
+ *     through local state, so neither one is ever stomped by a
+ *     store-driven re-render mid-interaction.
+ *   • The store is only written on commit: slider pointerup/keyup,
+ *     input blur, or Enter on the input.
+ *   • The displayed value uses `fmtPoints` so whole numbers render
+ *     as "7" instead of "7.0" — trailing zeros would otherwise jump
+ *     the caret to the end on every store update.
+ */
+function PointsSliderInput({
+  criterionId,
+  matrix,
+  levelId,
+  points,
+  bounds,
+  locked,
+  ariaLabelledBy,
+  onRatingChange,
+}: PointsSliderInputProps) {
+  const validZones = matrix.levels.flatMap((l) => {
+    if (!l.points) return [];
+    if (l.points.type === "range" && l.points.min != null && l.points.max != null) {
+      return [{ min: l.points.min, max: l.points.max }];
+    }
+    if (l.points.type === "single" && l.points.value != null) {
+      return [{ min: l.points.value, max: l.points.value }];
+    }
+    return [];
+  });
+  const [dragPos, setDragPos] = useState<number | null>(null);
+  const [typedText, setTypedText] = useState<string | null>(null);
+  // Tracks whether the input currently has focus, so a slider drag
+  // doesn't overwrite a decimal point the user is mid-keystroke on.
+  const inputFocusedRef = useRef(false);
+  const sliderValue = dragPos ?? points ?? bounds.min;
+  const inputValue =
+    typedText ?? (Number.isFinite(points) ? fmtPoints(points ?? 0) : "");
+  const commitFromInput = (raw: string) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      // Bad input: fall back to the committed value.
+      setTypedText(null);
+      setDragPos(null);
+      return;
+    }
+    const clamped = Math.min(bounds.max, Math.max(bounds.min, parsed));
+    const nextLevel = getLevelForPoints(clamped, matrix);
+    const nextRange = getLevelRange(nextLevel, matrix);
+    const nextSingle = !nextRange ? getLevelPointsSingle(nextLevel, matrix) : null;
+    let nextPoints = clamped;
+    if (nextRange) {
+      nextPoints = Math.min(nextRange.max, Math.max(nextRange.min, clamped));
+    } else if (nextSingle != null) {
+      nextPoints = nextSingle;
+    }
+    setTypedText(null);
+    setDragPos(null);
+    onRatingChange(nextLevel, nextPoints);
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-md bg-muted/30 px-2.5 py-2">
+      <Slider
+        id={`criterion-${criterionId}-slider`}
+        min={bounds.min}
+        max={bounds.max}
+        step={1}
+        value={[sliderValue]}
+        onValueChange={(values) => {
+          const v = values[0] ?? bounds.min;
+          const clamped = Math.min(bounds.max, Math.max(bounds.min, v));
+          setDragPos(clamped);
+          // Mirror the drag position into the input only when the input
+          // doesn't own the caret.
+          if (!inputFocusedRef.current) {
+            setTypedText(fmtPoints(clamped));
+          }
+        }}
+        onValueCommit={(values) => {
+          const v = values[0] ?? bounds.min;
+          const derived = getLevelForPoints(v, matrix);
+          const nextRange = getLevelRange(derived, matrix);
+          const nextSingle = !nextRange ? getLevelPointsSingle(derived, matrix) : null;
+          let nextPoints = v;
+          if (nextRange) {
+            nextPoints = Math.min(nextRange.max, Math.max(nextRange.min, v));
+          } else if (nextSingle != null) {
+            nextPoints = nextSingle;
+          }
+          setDragPos(null);
+          setTypedText(null);
+          onRatingChange(derived, nextPoints);
+        }}
+        aria-labelledby={ariaLabelledBy}
+        className="flex-1"
+        disabled={locked}
+        validZones={validZones}
+      />
+      <Input
+        id={`criterion-${criterionId}-points`}
+        type="text"
+        inputMode="decimal"
+        value={inputValue}
+        onFocus={() => {
+          inputFocusedRef.current = true;
+        }}
+        onChange={(e) => {
+          const raw = e.target.value;
+          // Typing path: mirror live into the slider, but never touch
+          // the input's own text — so "7." isn't stomped back to "7".
+          setTypedText(raw);
+          const parsed = Number(raw);
+          if (Number.isFinite(parsed)) {
+            const clamped = Math.min(bounds.max, Math.max(bounds.min, parsed));
+            setDragPos(clamped);
+          }
+        }}
+        onBlur={(e) => {
+          inputFocusedRef.current = false;
+          commitFromInput(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            inputFocusedRef.current = false;
+            commitFromInput(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
+        }}
+        aria-labelledby={ariaLabelledBy}
+        disabled={locked}
+        className="h-9 w-14 text-center tabular-nums"
+      />
+    </div>
   );
 }

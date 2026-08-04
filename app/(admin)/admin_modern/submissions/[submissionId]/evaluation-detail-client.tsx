@@ -7,7 +7,7 @@
  * subscription, and composes the Assessment tab + left column tabs
  * inside the two-column template.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, FileText, Upload, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +51,11 @@ export function EvaluationDetailClient({
   );
 
   const fallbackDraft = useMemo(() => emptyEvaluationDraft(), []);
+  // Live 0–100 percentage reported by the direct-grade control while
+  // the reviewer is dragging the slider / typing in the numeric input.
+  // Used to surface the same number into the hero card's "Percentage:"
+  // chip so it tracks what the reviewer is interacting with.
+  const [liveDirectPercent, setLiveDirectPercent] = useState<number | null>(null);
   const {
     draft,
     derived,
@@ -151,9 +156,13 @@ export function EvaluationDetailClient({
       totalMarks={liveSubmission.totalMarks}
       gradeFormat={liveSubmission.gradeType}
       gradeScale={gradeScale}
-      scorePercent={derived.percentage ?? derived.engine?.percentage ?? null}
+      scorePercent={liveDirectPercent ?? derived.percentage ?? derived.engine?.percentage ?? null}
       passFail={derived.passFail}
       effectiveGrade={derived.effectiveGrade}
+      hasGradeProfile={
+        rubric?.matrix.gradingMethod === "grade_profile" &&
+        rubric.matrix.profileRules.length > 0
+      }
     />
   );
 
@@ -205,6 +214,7 @@ export function EvaluationDetailClient({
           gradeScale={gradeScale}
           onRatingChange={setRating}
           onDirectGradeChange={setDirectGrade}
+          onLiveDirectPercentChange={setLiveDirectPercent}
           onOverridePatch={setOverride}
           onMarkCompleteChange={setMarkComplete}
           onNotifyChange={setNotify}
@@ -232,13 +242,18 @@ export function EvaluationDetailClient({
    */
   const belowRightTabs = (
     <>
-      <CalculationExplanation
-        derived={derived}
-        rubricLocked={derived.rubricLocked}
-        gradeFormat={liveSubmission.gradeType}
-        totalMarks={liveSubmission.totalMarks}
-        directGradeValue={draft.directGrade}
-      />
+      {/* "How this was calculated" only applies to rubric-graded
+          submissions. Direct-grade assignments grade via the assignment's
+          grade format alone, with no per-criterion breakdown to show. */}
+      {rubric && (
+        <CalculationExplanation
+          derived={derived}
+          rubric={rubric}
+          gradeFormat={liveSubmission.gradeType}
+          totalMarks={liveSubmission.totalMarks}
+          directGradeValue={draft.directGrade}
+        />
+      )}
       {currentAttempt && (
         <AccessWindowTab
           attempt={currentAttempt}

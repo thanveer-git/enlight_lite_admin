@@ -52,6 +52,9 @@ interface SubmissionOverviewCardProps {
   passFail: "pass" | "fail" | null;
   /** Effective grade label from the engine. */
   effectiveGrade: string | null;
+  /** True when the rubric defines a Grade Profile. Gates the right-side
+   *  gauge pane so it only appears when Grade Profile can produce a result. */
+  hasGradeProfile: boolean;
 }
 
 const STATUS_LABEL: Record<Submission["currentStatus"], string> = {
@@ -92,6 +95,7 @@ export function SubmissionOverviewCard({
   scorePercent,
   passFail,
   effectiveGrade,
+  hasGradeProfile,
 }: SubmissionOverviewCardProps) {
   const attempt = submission.attempts[submission.viewingAttempt - 1]!;
 
@@ -129,6 +133,9 @@ export function SubmissionOverviewCard({
 // "Complete", "B", "Excellent", …). When nothing has been graded yet
   // we render "—" instead of inventing a placeholder.
   const isPercentageFormat = gradeFormat === "Percentage";
+  const isMarksFormat = gradeFormat === "Marks";
+  const showMarksMax =
+    isMarksFormat && submission.totalMarks != null && displayedGrade != null;
   const displayedGradeText =
     displayedGrade == null
       ? "—"
@@ -293,7 +300,10 @@ export function SubmissionOverviewCard({
           </div>
         </div>
 
-        {/* Right: grade summary — WaterFill backdrop with grade + pass/fail chip */}
+        {/* Right: grade summary — WaterFill backdrop with grade + pass/fail chip.
+            Only shown when the rubric defines a Grade Profile; otherwise the
+            gauge has no meaningful number to render. */}
+        {hasGradeProfile && (
         <div className="flex w-full flex-col items-center justify-center gap-2.5 py-3 md:max-w-[14rem] md:border-l md:border-border/60 md:pl-6">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Result
@@ -320,11 +330,23 @@ export function SubmissionOverviewCard({
             <div className="relative z-10 flex flex-col items-center gap-1">
               <span
                 className={cn(
-                  "text-3xl font-semibold leading-none tracking-tight tabular-nums",
+                  "inline-flex items-baseline text-3xl font-semibold leading-none tracking-tight tabular-nums",
                   gaugeColor,
                 )}
               >
-                {displayedGradeText}
+                {showMarksMax ? (
+                  <>
+                    <span>{displayedGrade}</span>
+                    <span
+                      className="ml-0.5 text-[0.55em] font-medium text-muted-foreground/70"
+                      aria-label={`out of ${submission.totalMarks}`}
+                    >
+                      /{submission.totalMarks}
+                    </span>
+                  </>
+                ) : (
+                  displayedGradeText
+                )}
               </span>
               {hasPassFailConfig && displayedPass && (
                 <Badge
@@ -344,10 +366,12 @@ export function SubmissionOverviewCard({
             </div>
           </div>
           {/* Show the underlying percentage for non-Percentage formats —
-              letter grades, CGPA, Marks, and Complete/Incomplete all
-              hide the raw 0–100 score by default, so surface it as a
-              small chip below the gauge for context. */}
-          {!isPercentageFormat && displayedScore != null && (
+              letter grades, Marks, and Complete/Incomplete all hide the
+              raw 0–100 score by default, so surface it as a small chip
+              below the gauge for context. CGPA is intentionally
+              excluded: the 0–10 native label is shown in the gauge and
+              a back-converted % chip is noise for that format. */}
+          {!isPercentageFormat && gradeFormat !== "CGPA" && displayedScore != null && (
             <Badge
               variant="outline"
               className="rounded-full text-[10px] font-medium tabular-nums text-muted-foreground"
@@ -357,6 +381,7 @@ export function SubmissionOverviewCard({
             </Badge>
           )}
         </div>
+        )}
       </ECard.Body>
 
       {(gradeTypeChip || rubricChip) && (
