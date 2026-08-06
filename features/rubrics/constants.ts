@@ -90,10 +90,14 @@ export interface GradeScale {
    * `configuration.passMark` (Percentage/CGPA/Marks) or the
    * Comp/Incomp thresholds. Letter scales set this so admins can mark
    * non-contiguous bands pass if they need to (e.g. A, B, C only).
+   * Bands not listed in `passBands` are implicitly Fail.
    */
   passBands?: string[];
   /** Format-aware configuration (thresholds, ceilings, labels). */
   configuration?: GradeScaleConfiguration;
+  /** Number of assignments currently using this scale. Surfaced as
+   *  a non-blocking warning in the editor (EDUBEX §6). */
+  used?: number;
   /** Runtime hints (editability, lifecycle). */
   meta?: GradeScaleMeta;
 }
@@ -200,7 +204,7 @@ export const GRADE_SCALES: GradeScale[] = [
     passBands: ["A", "C", "D"],
     meta: {
       isEditable: true,
-      status: "in_use",
+      status: "draft",
       gradeType: "letter_grading",
       description:
         "Six-band A–F scale, the most common academic letter grading system.",
@@ -221,7 +225,7 @@ export const GRADE_SCALES: GradeScale[] = [
     passBands: ["Excellent", "Very Good", "Good"],
     meta: {
       isEditable: true,
-      status: "in_use",
+      status: "published",
       gradeType: "letter_grading",
       description:
         "Six-band descriptive performance scale commonly used for oral / presentation rubrics.",
@@ -236,6 +240,14 @@ export function findGradeScale(id: string | null): GradeScale | null {
   if (!id) return null;
   return GRADE_SCALES.find((scale) => scale.id === id) ?? null;
 }
+
+/**
+ * Re-export the public resolver. Prefer this over `findGradeScale`
+ * in new code — it routes through the cache layer added in
+ * `grade-scales.ts` and keeps the API migration surface small.
+ * `findGradeScale` remains as a thin wrapper for backwards compat.
+ */
+export { getGradeScale } from "@/features/rubrics/grade-scales";
 
 /** Built-in scales: percentage, cgpa, marks, comp_incomp. Not editable. */
 export function builtInGradeScales(): GradeScale[] {

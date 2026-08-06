@@ -62,6 +62,26 @@ export const NAV_ITEMS: Navigation = [
         ],
       },
       {
+        title: "Grading",
+        href: ROUTES.admin.grading.root,
+        icon: GraduationCap,
+        description: "Grade scales and band definitions",
+        subItems: [
+          {
+            title: "All Grades",
+            href: ROUTES.admin.grading.all,
+            icon: FileText,
+            description: "Built-in and custom grade scales",
+          },
+          {
+            title: "New Grade",
+            href: ROUTES.admin.grading.form(0),
+            icon: PlusCircle,
+            description: "Create a new letter-grade scale",
+          },
+        ],
+      },
+      {
         title: "Assessments",
         href: `${ROUTES.admin.root}/assessments`,
         icon: ListChecks,

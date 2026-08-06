@@ -160,8 +160,12 @@ export function EvaluationDetailClient({
       passFail={derived.passFail}
       effectiveGrade={derived.effectiveGrade}
       hasGradeProfile={
-        rubric?.matrix.gradingMethod === "grade_profile" &&
-        rubric.matrix.profileRules.length > 0
+        // Hide the gauge only for unscored rubrics with no grade profile
+        // (e.g. rb_0061) — the engine returns `requiresManualOverride`
+        // with no band label, so WaterFill would have no value to fill.
+        // Every other case (no rubric, scored rubric, or unscored rubric
+        // with a grade profile) renders the gauge.
+        rubric?.type !== "unscored" || rubric.matrix.profileRules.length > 0
       }
     />
   );

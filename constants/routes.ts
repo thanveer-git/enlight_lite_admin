@@ -12,6 +12,13 @@ export const ROUTES = {
       // id) means create a new rubric; existing ids open the editor.
       form: (id: string | number = 0) => `/admin_modern/rubrics/form/${id}`,
     },
+    grading: {
+      root: "/admin_modern/grading",
+      all: "/admin_modern/grading",
+      // `form` takes the grade-scale id. `0` means create a new scale;
+      // existing ids open the editor (letter-grading only).
+      form: (id: string | number = 0) => `/admin_modern/grading/form/${id}`,
+    },
     submissions: {
       root: "/admin_modern/submissions",
       list: "/admin_modern/submissions",
