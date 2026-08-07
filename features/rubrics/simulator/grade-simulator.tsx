@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { GRADE_SCALES, findGradeScale, type GradeScale, type GradeScaleType } from "@/features/rubrics/constants";
+import { cn } from "@/lib/utils";
 import { evaluateRubric, type CriterionRating, type EvaluationResult } from "@/features/rubrics/evaluation";
 import type { RubricDetail, RubricMatrix, RubricType } from "@/types/rubric";
 
@@ -73,6 +74,12 @@ export interface GradeSimulatorProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
+  /** Render mode. "dialog" wraps the simulator in a Dialog (default).
+   * "inline" renders the simulator body directly, no Dialog wrapper — for
+   * use inside another modal/page where a nested dialog is unwanted. */
+  variant?: "dialog" | "inline";
+  /** Suppress the simulator's own card header when the host provides one. */
+  hideHeader?: boolean;
 }
 
 interface RatingState {
@@ -226,6 +233,8 @@ export function GradeSimulator({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   showTrigger = true,
+  variant = "dialog",
+  hideHeader = false,
 }: GradeSimulatorProps) {
   const isEmbedded = embedded || Boolean(embeddedRubricId);
 
@@ -379,25 +388,24 @@ export function GradeSimulator({
 
   const suggestedScale = findGradeScale(suggestedScaleId);
 
-  const dialogContent = (
-    <DialogContent className="max-w-3xl w-[min(94vw,720px)] max-h-[90vh] gap-0 overflow-hidden p-0 sm:rounded-xl">
-      <DialogHeader className="flex-row items-center gap-3 border-b bg-gradient-to-br from-muted/40 to-muted/10 px-4 py-2.5">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-soft">
-          <Beaker className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <DialogTitle className="text-sm font-semibold tracking-tight">
-            Grade Simulator
-          </DialogTitle>
-          <DialogDescription className="text-[11px] text-muted-foreground">
-            Configure ratings and run a live calculation against the selected scale.
-          </DialogDescription>
-        </div>
-      </DialogHeader>
+  const headerSection = (
+    <div className="flex flex-row items-center gap-3 border-b bg-gradient-to-br from-muted/40 to-muted/10 px-4 py-2.5">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-soft">
+        <Beaker className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <DialogTitle className="text-sm font-semibold tracking-tight">
+          Grade Simulator
+        </DialogTitle>
+        <DialogDescription className="text-[11px] text-muted-foreground">
+          Configure ratings and run a live calculation against the selected scale.
+        </DialogDescription>
+      </div>
+    </div>
+  );
 
-      <div className="grid max-h-[calc(85vh-8.5rem)] grid-cols-1 overflow-y-auto">
-        <section className="flex min-h-0 flex-col">
-          <div className="space-y-3 px-4 py-3">
+  const scrollableBody = (
+    <div className="space-y-3 px-4 py-3">
             {phase === "configure" ? (
               <>
                 <ConfigBlock
@@ -581,68 +589,93 @@ export function GradeSimulator({
               />
             )}
           </div>
+  );
 
-          </section>
+  const footerSection = (
+    <div className="flex flex-row items-center gap-3 border-t bg-muted/30 px-4 py-2.5">
+      {phase === "configure" ? (
+        <div className="flex w-full items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resetRatings}
+            className="h-9 w-1/2 gap-2 border-dashed"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canSeeResult}
+            onClick={handleSeeResult}
+            className="group relative h-9 w-1/2 overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm shadow-violet-500/25 transition-all hover:from-violet-500 hover:to-indigo-500 hover:shadow-md hover:shadow-violet-500/30 active:scale-[0.98]"
+          >
+            <span className="relative z-10 flex items-center justify-center gap-1.5">
+              See Result
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
+          </Button>
+          <GetJsonButton detail={embeddedDetail ?? null} />
+        </div>
+      ) : (
+        <div className="flex w-full items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resetRatings}
+            className="group h-10 w-1/2 gap-2 border-dashed"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleBackToConfigure}
+            className="group relative h-9 w-1/2 overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm shadow-violet-500/25 transition-all hover:from-violet-500 hover:to-indigo-500 hover:shadow-md hover:shadow-violet-500/30 active:scale-[0.98]"
+          >
+            <span className="relative z-10 flex items-center justify-center gap-1.5">
+              Back to Step 1
+              <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
+            </span>
+            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
+          </Button>
+          <GetJsonButton detail={embeddedDetail ?? null} />
+        </div>
+      )}
+    </div>
+  );
+
+  const dialogContent = (
+    <DialogContent className="max-w-3xl w-[min(94vw,720px)] max-h-[90vh] gap-0 overflow-hidden p-0 sm:rounded-xl">
+      {headerSection}
+      <div className="grid max-h-[calc(85vh-8.5rem)] grid-cols-1 overflow-y-auto">
+        <section className="flex min-h-0 flex-col">{scrollableBody}</section>
       </div>
-
-      <DialogFooter className="flex-row items-center gap-3 border-t bg-muted/30 px-4 py-2.5">
-        {phase === "configure" ? (
-          <div className="flex w-full items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={resetRatings}
-              className="h-9 w-1/2 gap-2 border-dashed"
-            >
-              <RotateCcw className="size-3.5" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canSeeResult}
-              onClick={handleSeeResult}
-              className="group relative h-9 w-1/2 overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm shadow-violet-500/25 transition-all hover:from-violet-500 hover:to-indigo-500 hover:shadow-md hover:shadow-violet-500/30 active:scale-[0.98]"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-1.5">
-                See Result
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
-            </Button>
-            <GetJsonButton detail={embeddedDetail ?? null} />
-          </div>
-        ) : (
-          <div className="flex w-full items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={resetRatings}
-              className="group h-10 w-1/2 gap-2 border-dashed"
-            >
-              <RotateCcw className="size-3.5" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleBackToConfigure}
-              className="group relative h-9 w-1/2 overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm shadow-violet-500/25 transition-all hover:from-violet-500 hover:to-indigo-500 hover:shadow-md hover:shadow-violet-500/30 active:scale-[0.98]"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-1.5">
-                Back to Step 1
-                <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
-              </span>
-              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
-            </Button>
-            <GetJsonButton detail={embeddedDetail ?? null} />
-          </div>
-        )}
-      </DialogFooter>
+      <DialogFooter className="p-0 m-0">{footerSection}</DialogFooter>
     </DialogContent>
   );
+
+  const inlineBody = (
+    <div
+      className={cn(
+        "overflow-hidden bg-card",
+        !hideHeader && "rounded-lg border shadow-soft",
+      )}
+    >
+      {!hideHeader && headerSection}
+      {scrollableBody}
+      {footerSection}
+    </div>
+  );
+
+  if (variant === "inline") {
+    return inlineBody;
+  }
 
   return (
     <Dialog

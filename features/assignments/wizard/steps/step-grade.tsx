@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,10 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
   const [selectedDetail, setSelectedDetail] = useState<RubricDetail | null>(null);
   const [newRubricOpen, setNewRubricOpen] = useState(false);
 
+  const refreshRubricList = () => {
+    apiClient.listRubrics({ pageSize: 100 }).then((res) => setRubricList(res.data));
+  };
+
   useEffect(() => {
     let cancelled = false;
     apiClient.listRubrics({ pageSize: 100 }).then((res) => {
@@ -57,6 +62,14 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
       cancelled = true;
     };
   }, []);
+
+  const handleNewRubricCreated = (rubric: Rubric) => {
+    toast.success("Rubric created", { description: rubric.name });
+    refreshRubricList();
+    if (draft.useRubric) {
+      onPatch({ rubricId: rubric.id });
+    }
+  };
 
   // Fetch the full detail (with matrix) for the currently selected rubric
   // so we can read `matrix.suggestedScaleId` for the Unscored-rubric rules.
@@ -352,7 +365,11 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
         </p>
       </FormSection>
 
-      <InlineRubricModal open={newRubricOpen} onOpenChange={setNewRubricOpen} />
+      <InlineRubricModal
+        open={newRubricOpen}
+        onOpenChange={setNewRubricOpen}
+        onCreated={handleNewRubricCreated}
+      />
     </div>
   );
 }

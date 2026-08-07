@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { CheckCircle2, ChevronDown, ChevronUp, Edit3, FileText, TriangleAlert } from "lucide-react";
+import { Beaker, CheckCircle2, ChevronDown, ChevronUp, Edit3, FileText, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +16,10 @@ import type { GradeProfileRule, LevelPoints, ProfilePath, RubricDetail, RubricMa
 export interface StepReviewProps {
   draft: RubricDraft;
   onJumpToStep: (step: ValidationStep) => void;
+  /** When true, renders the simulator inline below the review content
+   * (no nested dialog). Used when the wizard itself is mounted inside a
+   * modal. */
+  compact?: boolean;
 }
 
 const STEP_LABEL: Record<ValidationStep, string> = {
@@ -117,7 +121,7 @@ function describeMatrix(matrix: RubricMatrix) {
   return { totalCells, filled };
 }
 
-export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
+export function StepReview({ draft, onJumpToStep, compact = false }: StepReviewProps) {
   const { blockers, warnings } = useMemo(() => getRubricValidation(draft), [draft]);
   const matrix = draft.matrix;
   const suggestedScale = findGradeScale(matrix.suggestedScaleId);
@@ -150,10 +154,21 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
           <ValidationSummary blockers={blockers} warnings={warnings} onJumpToStep={onJumpToStep} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <GradeSimulator embedded matrix={matrix} rubricType={draft.type} rubricName={draft.name} />
+          {!compact && (
+            <GradeSimulator embedded matrix={matrix} rubricType={draft.type} rubricName={draft.name} />
+          )}
           <GetJsonButton detail={debugDetail} />
         </div>
       </div>
+
+      {compact && (
+        <InlineSimulatorSection
+          matrix={matrix}
+          rubricType={draft.type}
+          rubricName={draft.name}
+          detail={debugDetail}
+        />
+      )}
 
       <Section title="Identity" step="info" onEdit={() => onJumpToStep("info")}>
         <div className="overflow-hidden rounded-lg border bg-card">
@@ -576,5 +591,70 @@ function Empty({ message = "Not set" }: { message?: string }) {
     <span className="inline-flex items-center gap-1 text-xs italic text-muted-foreground">
       <FileText className="size-3" /> {message}
     </span>
+  );
+}
+
+interface InlineSimulatorSectionProps {
+  matrix: RubricMatrix;
+  rubricType: RubricDraft["type"];
+  rubricName: string;
+  detail: RubricDetail;
+}
+
+function InlineSimulatorSection({
+  matrix,
+  rubricType,
+  rubricName,
+  detail,
+}: InlineSimulatorSectionProps) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 bg-gradient-to-br from-muted/40 to-muted/10 px-4 py-2.5 text-left transition-colors hover:from-muted/50 hover:to-muted/20"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-soft">
+            <Beaker className="size-4" />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-sm font-semibold tracking-tight">Grade Simulator</p>
+            <p className="text-[11px] text-muted-foreground">
+              Configure ratings and run a live calculation against the selected scale.
+            </p>
+          </div>
+        </div>
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1 text-xs font-medium text-primary transition-transform duration-300 ease-in-out",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        >
+          <ChevronDown className="size-3" />
+        </span>
+      </button>
+      <div
+        className={cn(
+          "grid transition-all duration-300 ease-in-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        )}
+      >
+        <div className="overflow-hidden">
+          <GradeSimulator
+            variant="inline"
+            embedded
+            hideHeader
+            matrix={matrix}
+            rubricType={rubricType}
+            rubricName={rubricName}
+            detail={detail}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

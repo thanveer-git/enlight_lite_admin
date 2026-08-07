@@ -14,9 +14,12 @@ export interface WizardPageProps {
   breadcrumbs?: BreadcrumbItem[];
   title: string;
   description?: string;
-  steps: WizardStep[];
-  currentStep: string;
-  content: ReactNode;
+  steps?: WizardStep[];
+  currentStep?: string;
+  content?: ReactNode;
+  /** When provided, the built-in step rail is skipped in favor of the
+   * caller's own (e.g. an embedded wizard that controls its own steps). */
+  children?: ReactNode;
   actions?: ReactNode;
   className?: string;
   onStepClick?: (id: string) => void;
@@ -30,12 +33,13 @@ export function WizardPage({
   steps,
   currentStep,
   content,
+  children,
   actions,
   className,
   onStepClick,
   isStepLocked,
 }: WizardPageProps) {
-  const currentIdx = steps.findIndex((s) => s.id === currentStep);
+  const currentIdx = steps ? steps.findIndex((s) => s.id === currentStep) : 0;
   const safeIdx = currentIdx === -1 ? 0 : currentIdx;
 
   return (
@@ -43,11 +47,12 @@ export function WizardPage({
       {breadcrumbs && <Breadcrumb items={breadcrumbs} />}
       <PageHeader title={title} description={description} />
 
-      <ol
-        aria-label="Wizard steps"
-        className="flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft"
-      >
-        {steps.map((step, idx) => {
+      {!children && steps && currentStep && (
+        <ol
+          aria-label="Wizard steps"
+          className="flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft"
+        >
+          {steps.map((step, idx) => {
           const status = idx < safeIdx ? "done" : idx === safeIdx ? "current" : "upcoming";
           const isLast = idx === steps.length - 1;
           const locked = !!onStepClick && (isStepLocked?.(step.id) ?? false);
@@ -115,13 +120,20 @@ export function WizardPage({
           );
         })}
       </ol>
+      )}
 
       <div className="flex flex-col gap-4">
-        <div className="space-y-6">{content}</div>
-        {actions && (
-          <div className="rounded-lg border bg-card p-4 shadow-soft">
-            <div className="flex items-center justify-between gap-2">{actions}</div>
-          </div>
+        {children ? (
+          children
+        ) : (
+          <>
+            <div className="space-y-6">{content}</div>
+            {actions && (
+              <div className="rounded-lg border bg-card p-4 shadow-soft">
+                <div className="flex items-center justify-between gap-2">{actions}</div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
