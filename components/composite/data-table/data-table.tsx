@@ -250,11 +250,15 @@ export function DataTable<TData, TValue>({
               ))}
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <tr
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  className="border-b border-border/60 transition-colors duration-150 hover:bg-muted/40 data-[state=selected]:bg-muted/60"
+                  style={{ animationDelay: `${index * 40}ms` }}
+                  className={cn(
+                    "border-b border-border/60 transition-colors duration-150 hover:bg-muted/40 data-[state=selected]:bg-muted/60",
+                    "dt-row-animate",
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => renderBodyCell(cell))}
                 </tr>
