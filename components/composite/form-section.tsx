@@ -6,17 +6,21 @@ import { cn } from "@/lib/utils";
 export interface FormSectionProps {
   title: string;
   description?: string;
+  actions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
 }
 
-export function FormSection({ title, description, children, footer, className }: FormSectionProps) {
+export function FormSection({ title, description, actions, children, footer, className }: FormSectionProps) {
   return (
     <Card className={cn("shadow-soft", className)}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+        <div className="grid gap-1.5">
+          <CardTitle>{title}</CardTitle>
+          {description && <CardDescription>{description}</CardDescription>}
+        </div>
+        {actions && <div className="shrink-0">{actions}</div>}
       </CardHeader>
       <CardContent className="space-y-4">{children}</CardContent>
       {footer && (

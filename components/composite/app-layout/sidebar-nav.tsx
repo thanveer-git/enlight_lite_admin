@@ -101,7 +101,7 @@ function NavItemWithSubItems({
   const [open, setOpen] = useState<boolean>(isActive);
 
   useEffect(() => {
-    if (isActive) setOpen(true);
+    setOpen(isActive);
   }, [isActive]);
 
   const parent = (

@@ -120,7 +120,7 @@ export function DateTimeField({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-auto p-0"
+          className="w-auto p-3"
           align="start"
           sideOffset={6}
         >
@@ -130,11 +130,13 @@ export function DateTimeField({
             onSelect={handleDateSelect}
             showOutsideDays
             classNames={{
-              // v10 also merges `getDefaultClassNames()` automatically.
+              month_grid: "border-collapse",
               caption_label: "text-sm font-medium",
               button_previous: "size-7 rounded-md border border-input bg-background hover:bg-accent mr-1",
               button_next: "size-7 rounded-md border border-input bg-background hover:bg-accent ml-1",
               weekdays: "text-muted-foreground text-[11px] font-medium uppercase",
+              weekday: "w-9 text-center",
+              day: "p-0 text-center",
               day_button:
                 "size-9 rounded-md text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
               selected:

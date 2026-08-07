@@ -25,6 +25,13 @@ export const ROUTES = {
       // `detail` takes a submission id and opens the evaluation console.
       detail: (id: string) => `/admin_modern/submissions/${id}`,
     },
+    assignments: {
+      root: "/admin_modern/assignments",
+      all: "/admin_modern/assignments",
+      // `form` takes the assignment id. `0` (or any non-existing id) means
+      // create a new assignment; existing ids open the editor.
+      form: (id: string | number = 0) => `/admin_modern/assignments/form/${id}`,
+    },
   },
   dev: {
     primitives: "/dev/primitives",

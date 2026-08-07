@@ -39,7 +39,7 @@ export function WizardPage({
   const safeIdx = currentIdx === -1 ? 0 : currentIdx;
 
   return (
-    <div className={cn("flex flex-col gap-6", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-6", className)}>
       {breadcrumbs && <Breadcrumb items={breadcrumbs} />}
       <PageHeader title={title} description={description} />
 
@@ -66,7 +66,7 @@ export function WizardPage({
               </span>
               <span
                 className={cn(
-                  "text-sm whitespace-nowrap",
+                  "truncate text-sm",
                   status === "current" && "font-semibold text-foreground",
                   status === "done" && "font-medium text-foreground",
                   status === "upcoming" && "font-normal text-muted-foreground",

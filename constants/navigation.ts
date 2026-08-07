@@ -62,6 +62,26 @@ export const NAV_ITEMS: Navigation = [
         ],
       },
       {
+        title: "Assignments",
+        href: ROUTES.admin.assignments.root,
+        icon: ScrollText,
+        description: "Assignment definitions",
+        subItems: [
+          {
+            title: "All Assignments",
+            href: ROUTES.admin.assignments.all,
+            icon: FileText,
+            description: "List of assignments",
+          },
+          {
+            title: "New Assignment",
+            href: ROUTES.admin.assignments.form(0),
+            icon: PlusCircle,
+            description: "Create a new assignment",
+          },
+        ],
+      },
+      {
         title: "Grading",
         href: ROUTES.admin.grading.root,
         icon: GraduationCap,

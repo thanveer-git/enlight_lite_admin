@@ -1,6 +1,9 @@
 import { FAKE_RUBRICS } from "@/services/handlers/rubrics";
 import { FAKE_RUBRIC_DETAILS } from "@/services/handlers/rubric-details";
 import { FAKE_CURRENT_USER, FAKE_USERS } from "@/services/handlers/users";
+import { FAKE_ASSIGNMENTS } from "@/features/assignments/seed";
+import type { AssignmentDraft, AssignmentStatus } from "@/features/assignments/wizard/types";
+import { EMPTY_DRAFT } from "@/features/assignments/wizard/types";
 import type { RubricDraft } from "@/features/rubrics/wizard/types";
 import type { Rubric, RubricDetail, RubricMatrix, RubricStatus, RubricType } from "@/types/rubric";
 import type { User } from "@/types/session";
@@ -258,6 +261,37 @@ export const apiClient = {
       type: detail.type,
       matrix: detail.matrix,
     });
+  },
+
+  // ── Assignments ─────────────────────────────────────────────────────
+
+  async getAssignmentDraft(id: string | number): Promise<AssignmentDraft> {
+    if (id === 0 || id === "0") return delay(EMPTY_DRAFT());
+    const row = FAKE_ASSIGNMENTS.find((a) => a.id === String(id));
+    if (!row) return delay(EMPTY_DRAFT());
+    // Deep clone so the wizard's local state mutations don't leak into
+    // the shared seed array.
+    return delay(JSON.parse(JSON.stringify(row)) as AssignmentDraft);
+  },
+
+  async createAssignment(draft: AssignmentDraft): Promise<AssignmentDraft> {
+    const created: AssignmentDraft = {
+      ...draft,
+      id: `asg_${Date.now()}`,
+    };
+    FAKE_ASSIGNMENTS.unshift(created);
+    return delay(created);
+  },
+
+  async updateAssignment(
+    id: string,
+    draft: AssignmentDraft,
+  ): Promise<AssignmentDraft | null> {
+    const idx = FAKE_ASSIGNMENTS.findIndex((a) => a.id === id);
+    if (idx === -1) return delay(null);
+    const updated: AssignmentDraft = { ...draft, id };
+    FAKE_ASSIGNMENTS[idx] = updated;
+    return delay(updated);
   },
 };
 
