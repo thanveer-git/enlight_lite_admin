@@ -5,9 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Edit3, FileText, TriangleAlert, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { FormSection } from "@/components/composite/form-section";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { ResolvedPreview } from "@/features/assignments/wizard/components/resolved-preview";
 import { findGradeScale } from "@/features/rubrics/constants";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/services/api-client";
@@ -38,6 +36,14 @@ const STEP_LABEL: Record<ValidationStep, string> = {
   review: "Step 5",
 };
 
+const STEP_TITLE: Record<ValidationStep, string> = {
+  details: "Details",
+  grade: "Grade",
+  outcomes: "Outcomes",
+  access: "Access & deadline",
+  review: "Review",
+};
+
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -46,8 +52,9 @@ function formatDate(iso: string | null): string {
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -78,59 +85,14 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
   const scale = findGradeScale(draft.gradeScaleId);
 
   return (
-    <div className="space-y-6">
-      {/* Validation summary */}
-      {validation.blockers.length > 0 ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 shadow-soft">
-          <div className="mb-2 flex items-center gap-2 text-destructive">
-            <TriangleAlert className="size-4" aria-hidden />
-            <span className="text-sm font-semibold">
-              {validation.blockers.length} blocking issue
-              {validation.blockers.length === 1 ? "" : "s"} to fix before publishing
-            </span>
-          </div>
-          <ul className="space-y-1.5 text-sm">
-            {validation.blockers.map((issue) => (
-              <li key={issue.id} className="flex items-start gap-2">
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-destructive underline"
-                  onClick={() => onJumpToStep(issue.step)}
-                >
-                  {STEP_LABEL[issue.step]}
-                </Button>
-                <span className="text-foreground">{issue.message}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div className="flex items-start gap-3 rounded-lg border border-success/40 bg-success/5 p-4 shadow-soft">
-          <CheckCircle2 className="mt-0.5 size-4 text-success" aria-hidden />
-          <div className="grid gap-0.5">
-            <span className="text-sm font-semibold">All required fields are complete.</span>
-            <span className="text-sm text-muted-foreground">
-              This assignment is ready to publish.
-            </span>
-          </div>
-        </div>
-      )}
+    <div className="space-y-4">
+      <ValidationSummary
+        blockers={validation.blockers}
+        warnings={validation.warnings}
+        onJumpToStep={onJumpToStep}
+      />
 
-      {/* Identity */}
-      <FormSection
-        title="Identity"
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Step 1 · Details</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => onJumpToStep("details")}>
-              <Edit3 className="mr-1 size-3.5" />
-              Edit
-            </Button>
-          </div>
-        }
-      >
+      <Section title="Identity" step="details" onJumpToStep={onJumpToStep}>
         <div className="grid gap-3 sm:grid-cols-2">
           <SummaryRow label="Title" value={draft.title.trim() || "—"} />
           <SummaryRow label="Lecture slug" value={draft.lectureSlug.trim() || "—"} />
@@ -146,21 +108,9 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
             }
           />
         </div>
-      </FormSection>
+      </Section>
 
-      {/* Grade rules */}
-      <FormSection
-        title="Grade rules"
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Step 2 · Grade scale & Rubric</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => onJumpToStep("grade")}>
-              <Edit3 className="mr-1 size-3.5" />
-              Edit
-            </Button>
-          </div>
-        }
-      >
+      <Section title="Grade rules" step="grade" onJumpToStep={onJumpToStep}>
         <div className="grid gap-3 sm:grid-cols-2">
           <SummaryRow
             label="Rubric"
@@ -199,21 +149,9 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
             }
           />
         </div>
-      </FormSection>
+      </Section>
 
-      {/* Outcome */}
-      <FormSection
-        title="Learning outcome"
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Step 3 · Outcomes</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => onJumpToStep("outcomes")}>
-              <Edit3 className="mr-1 size-3.5" />
-              Edit
-            </Button>
-          </div>
-        }
-      >
+      <Section title="Learning outcome" step="outcomes" onJumpToStep={onJumpToStep}>
         {draft.outcomeOverrideEnabled && (
           <Badge variant="warning" className="bg-warning/10 text-warning border-warning/30">
             Customized for this assignment
@@ -221,30 +159,23 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
         )}
         {stripHtml(draft.outcome).length > 0 ? (
           <div
-            className="prose prose-sm max-w-none rounded-md border bg-muted/30 p-3"
+            className="prose prose-sm max-w-none rounded-md border bg-card p-3 shadow-soft"
             dangerouslySetInnerHTML={{ __html: draft.outcome }}
           />
         ) : (
           <p className="text-sm text-muted-foreground">No outcome set.</p>
         )}
-      </FormSection>
+      </Section>
 
-      {/* Access rules */}
-      <FormSection
+      <Section
         title="Access rules"
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">Step 4 · Access & deadline</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => onJumpToStep("access")}>
-              <Edit3 className="mr-1 size-3.5" />
-              Edit
-            </Button>
-          </div>
-        }
+        step="access"
+        onJumpToStep={onJumpToStep}
+        actions={<ResolvedPreview rules={draft.accessRules} />}
       >
-        <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {draft.accessRules.map((r, idx) => (
-            <div key={r.id} className="rounded-md border bg-background p-3">
+            <div key={r.id} className="rounded-md border bg-card p-3 shadow-soft">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">Rule {idx + 1}</span>
                 <Badge variant="outline" className="capitalize">
@@ -284,16 +215,114 @@ export function StepReview({ draft, onJumpToStep }: StepReviewProps) {
             </div>
           ))}
         </div>
-      </FormSection>
+      </Section>
+    </div>
+  );
+}
 
-      <Separator />
+interface SectionProps {
+  title: string;
+  step: ValidationStep;
+  onJumpToStep: (step: ValidationStep) => void;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+function Section({ title, step, onJumpToStep, actions, children }: SectionProps) {
+  return (
+    <section className="space-y-3 rounded-lg border bg-muted/30 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-base font-semibold">{title}</h3>
+        <div className="flex items-center gap-3">
+          {actions}
+          <button
+            type="button"
+            onClick={() => onJumpToStep(step)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <Edit3 className="size-3" />
+            Edit {STEP_LABEL[step]} · {STEP_TITLE[step]}
+          </button>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+interface ValidationSummaryProps {
+  blockers: ReturnType<typeof validateAssignment>["blockers"];
+  warnings: ReturnType<typeof validateAssignment>["warnings"];
+  onJumpToStep: (step: ValidationStep) => void;
+}
+
+function ValidationSummary({ blockers, warnings, onJumpToStep }: ValidationSummaryProps) {
+  if (blockers.length === 0 && warnings.length === 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-md border border-success/40 bg-success/5 p-3 text-sm">
+        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+        <div>
+          <p className="font-medium text-foreground">Ready to publish</p>
+          <p className="text-xs text-muted-foreground">
+            All required fields are valid. Save as a draft or publish when you&apos;re ready.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {blockers.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="flex-1">
+              <p className="font-medium text-destructive">
+                {blockers.length} {blockers.length === 1 ? "blocker" : "blockers"} must be fixed
+                before publishing
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {blockers.map((issue) => (
+                  <li
+                    key={issue.id}
+                    className="flex items-start justify-between gap-2 text-foreground"
+                  >
+                    <span>{issue.message}</span>
+                    <button
+                      type="button"
+                      onClick={() => onJumpToStep(issue.step)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      <Edit3 className="size-3" />
+                      {STEP_LABEL[issue.step]}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
+          <p className="font-medium text-foreground">
+            {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+            {warnings.map((issue) => (
+              <li key={issue.id}>{issue.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
 function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className={cn("grid gap-0.5 rounded-md border bg-background px-3 py-2")}>
+    <div className={cn("grid gap-0.5 rounded-md border bg-card px-3 py-2 shadow-soft")}>
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
