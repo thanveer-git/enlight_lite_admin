@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, GraduationCap, ListChecks, Users } from "lucide-react";
 
@@ -7,6 +8,7 @@ import { DataTable } from "@/components/composite/data-table/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EDatetimpicker } from "@/components/ui/edatetimpicker";
 import { queryKeys } from "@/lib/query-keys";
 import { apiClient } from "@/services/api-client";
 import { DashboardPage, type DashboardStat } from "@/templates/dashboard-page";
@@ -37,6 +39,8 @@ export default function AdminDashboard() {
     queryKey: queryKeys.users.list({ page: 1, pageSize: 5 }),
     queryFn: () => apiClient.listUsers({ page: 1, pageSize: 5 }),
   });
+
+  const [schedule, setSchedule] = useState<Date | undefined>();
 
   return (
     <DashboardPage
@@ -83,6 +87,22 @@ export default function AdminDashboard() {
             </Button>
           </li>
         </ul>
+      </div>
+
+      <div className="space-y-3 border-t pt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          EDatetimpicker
+        </p>
+        <EDatetimpicker
+          value={schedule}
+          onChange={setSchedule}
+          placeholder="Schedule a date and time"
+          hourFormat={12}
+          timeInterval={15}
+        />
+        <p className="text-xs text-muted-foreground">
+          {schedule ? schedule.toLocaleString() : "Nothing selected yet"}
+        </p>
       </div>
     </DashboardPage>
   );

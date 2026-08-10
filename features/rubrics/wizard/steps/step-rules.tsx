@@ -362,6 +362,10 @@ export function StepRules({ matrix, type, onMatrixChange }: StepRulesProps) {
   };
 
   const minPassEnabled = matrix.minPassLevelId !== null;
+  // Unscored rubrics with grade profile rules disabled have no
+  // minimum-pass enforcement — keep the field visible but locked to
+  // "No minimum" so a stale value can't be set or displayed.
+  const minPassDisabled = !scored && matrix.gradingMethod !== "grade_profile";
 
   return (
     <div className="space-y-4">
@@ -450,9 +454,9 @@ export function StepRules({ matrix, type, onMatrixChange }: StepRulesProps) {
           <div className="grid gap-1.5">
             <Label htmlFor="min-pass-level">Minimum-pass rating</Label>
             <Select
-              value={matrix.minPassLevelId ?? NONE_FLOOR}
+              value={minPassDisabled ? NONE_FLOOR : (matrix.minPassLevelId ?? NONE_FLOOR)}
               onValueChange={(v) => setMinPassLevelId(v === NONE_FLOOR ? "" : v)}
-              disabled={!matrix.levels.length}
+              disabled={!matrix.levels.length || minPassDisabled}
             >
               <SelectTrigger id="min-pass-level">
                 <SelectValue placeholder="No minimum" />
@@ -467,11 +471,13 @@ export function StepRules({ matrix, type, onMatrixChange }: StepRulesProps) {
               </SelectContent>
             </Select>
             <p className="min-h-[16px] text-[11px] leading-[16px] text-muted-foreground">
-              {!matrix.levels.length
-                ? "Add at least one performance level on Step 2 first."
-                : minPassEnabled
-                  ? "Every criterion must reach this rating or higher."
-                  : "Failing criteria will not force resubmission."}
+              {minPassDisabled
+                ? "Minimum-pass rating is disabled for unscored rubrics without grade profile rules."
+                : !matrix.levels.length
+                  ? "Add at least one performance level on Step 2 first."
+                  : minPassEnabled
+                    ? "Every criterion must reach this rating or higher."
+                    : "Failing criteria will not force resubmission."}
             </p>
           </div>
           <div className="grid gap-1.5">

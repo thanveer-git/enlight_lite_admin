@@ -1,4 +1,5 @@
 import { findGradeScale } from "@/features/rubrics/constants";
+import { LEARNER_LABEL } from "@/lib/labels";
 import type { RubricDetail } from "@/types/rubric";
 
 import type { AssignmentDraft } from "@/features/assignments/wizard/types";
@@ -136,14 +137,14 @@ function checkAccess(draft: AssignmentDraft, out: ValidationIssue[]): void {
       out.push({
         id: `access-single-${rule.id}`,
         step: "access",
-        message: `${label} → Select exactly one student`,
+        message: `${label} → Select exactly one ${LEARNER_LABEL.singular.toLowerCase()}`,
       });
     }
     if (rule.audience === "multiple" && rule.studentIds.length === 0) {
       out.push({
         id: `access-multi-${rule.id}`,
         step: "access",
-        message: `${label} → Select at least one student`,
+        message: `${label} → Select at least one ${LEARNER_LABEL.singular.toLowerCase()}`,
       });
     }
   });

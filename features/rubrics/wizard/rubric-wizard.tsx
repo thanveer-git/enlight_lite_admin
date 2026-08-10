@@ -187,7 +187,19 @@ export function RubricWizard({
   };
 
   const handleMatrixChange = (matrix: RubricMatrix) => {
-    setDraft((current) => (current ? { ...current, matrix } : current));
+    setDraft((current) => {
+      if (!current) return current;
+      // Unscored rubrics with grade profile rules disabled have no
+      // minimum-pass enforcement. Strip any stale value so it can't
+      // linger in the saved matrix (e.g. after toggling the rules off).
+      const staleMinPass =
+        current.type === "unscored" &&
+        matrix.gradingMethod !== "grade_profile" &&
+        matrix.minPassLevelId !== null;
+      return staleMinPass
+        ? { ...current, matrix: { ...matrix, minPassLevelId: null } }
+        : { ...current, matrix };
+    });
   };
 
   const handleSave = async (status: RubricStatus): Promise<void> => {

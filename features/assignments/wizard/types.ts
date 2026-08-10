@@ -1,6 +1,7 @@
 import type { Rubric } from "@/types/rubric";
 
 import { FAKE_ASSIGNMENTS, SECTIONS, STUDENTS } from "@/features/assignments/seed";
+import { LEARNER_LABEL } from "@/lib/labels";
 
 export type AudienceType = "everyone" | "single" | "multiple";
 export type Priority = "high" | "medium" | "low";
@@ -9,8 +10,8 @@ export type AssignmentStatus = "draft" | "published" | "in_use";
 
 export const AUDIENCE_LABELS: Record<AudienceType, string> = {
   everyone: "Everyone",
-  single: "Single Student",
-  multiple: "Multiple Students",
+  single: `Single ${LEARNER_LABEL.singular}`,
+  multiple: `Multiple ${LEARNER_LABEL.plural}`,
 };
 
 export const PRIORITY_OF: Record<AudienceType, Priority> = {

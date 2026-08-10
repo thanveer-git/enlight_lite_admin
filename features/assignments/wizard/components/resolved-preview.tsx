@@ -24,6 +24,7 @@ import {
 } from "@/features/assignments/wizard/access";
 import { STUDENTS, type StudentLite } from "@/features/assignments/seed";
 import type { AccessRule } from "@/features/assignments/wizard/types";
+import { LEARNER_LABEL } from "@/lib/labels";
 
 export interface ResolvedPreviewProps {
   rules: AccessRule[];
@@ -119,13 +120,13 @@ export function ResolvedPreview({ rules, className }: ResolvedPreviewProps) {
 
           <div className="flex items-center gap-3">
             <Label htmlFor="preview-student" className="shrink-0 self-center text-sm leading-none">
-              Learners
+              {LEARNER_LABEL.plural}
             </Label>
             <SearchableSelect
               className="flex-1"
               triggerId="preview-student"
-              placeholder="Select a learner…"
-              searchPlaceholder="Search learners…"
+              placeholder={`Select a ${LEARNER_LABEL.singular.toLowerCase()}…`}
+              searchPlaceholder={`Search ${LEARNER_LABEL.plural.toLowerCase()}…`}
               value={studentId}
               onChange={setStudentId}
               options={STUDENTS.map((s: StudentLite) => ({ value: s.id, label: s.name }))}

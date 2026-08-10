@@ -60,16 +60,19 @@ export function AssessmentTab({
     <div className="space-y-4">
       {/* Manual override only applies to rubric-driven grading
           (edubex §4.11). For direct-grade submissions the engine
-          result IS the final grade — there's nothing to override. */}
-      {rubric && (
-        <OverrideControls
-          format={submission.gradeType}
-          totalMarks={submission.totalMarks}
-          gradeScale={gradeScale}
-          override={draft.override}
-          onPatch={onOverridePatch}
-        />
-      )}
+          result IS the final grade — there's nothing to override.
+          Unscored rubrics with no grade profile (e.g. rb_0061) have
+          no engine result to override either, so the block is hidden. */}
+      {rubric &&
+        (rubric.type !== "unscored" || rubric.matrix.profileRules.length > 0) && (
+          <OverrideControls
+            format={submission.gradeType}
+            totalMarks={submission.totalMarks}
+            gradeScale={gradeScale}
+            override={draft.override}
+            onPatch={onOverridePatch}
+          />
+        )}
 
       {rubric ? (
         rubric.matrix.criteria.length === 0 ? (

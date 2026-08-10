@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DateTimeField } from "@/components/ui/date-time-field";
+import { EDatetimpicker } from "@/components/ui/edatetimpicker";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,13 @@ const PRIORITY_TONE: Record<string, string> = {
   low: "bg-muted text-muted-foreground border-border",
 };
 
+// AccessRule stores timestamps as ISO strings; EDatetimpicker works with
+// Date values, so adapt across the boundary.
+const isoToDate = (v: string | null): Date | undefined =>
+  v ? new Date(v) : undefined;
+const dateToIso = (d: Date | undefined): string | null =>
+  d ? d.toISOString() : null;
+
 export function AccessRuleCard({
   rule,
   index,
@@ -64,16 +71,9 @@ export function AccessRuleCard({
     onRemove();
   };
 
-  const handleResetDates = () => {
-    onChange({
-      fromAt: null,
-      dueAt: null,
-      untilAt: null,
-      updatedAt: Date.now(),
-    });
+  const handleResetField = (field: "fromAt" | "dueAt" | "untilAt") => {
+    onChange({ [field]: null, updatedAt: Date.now() });
   };
-
-  const hasAnyDate = !!(rule.fromAt || rule.dueAt || rule.untilAt);
 
   return (
     <div className="rounded-lg border bg-card p-4 shadow-soft">
@@ -160,56 +160,93 @@ export function AccessRuleCard({
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Schedule</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleResetDates}
-            disabled={!hasAnyDate}
-            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="mr-1 size-3.5" />
-            Reset dates
-          </Button>
-        </div>
-
         <div className="grid gap-2">
           <Label>Available From</Label>
-          <DateTimeField
-            value={rule.fromAt}
-            onChange={(v) => onChange({ fromAt: v, updatedAt: Date.now() })}
-            placeholder="When opens"
-          />
+          <div className="flex items-center gap-2">
+            <EDatetimpicker
+              value={isoToDate(rule.fromAt)}
+              onChange={(v) => onChange({ fromAt: dateToIso(v), updatedAt: Date.now() })}
+              placeholder="When opens"
+              className="min-w-0 flex-[3]"
+              hourFormat={12}
+              timeInterval={15}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleResetField("fromAt")}
+              disabled={!rule.fromAt}
+              className="h-9 flex-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Reset Available From"
+            >
+              <RotateCcw className="mr-1 size-3.5" />
+              Reset
+            </Button>
+          </div>
         </div>
         <div className="grid gap-2">
           <Label>Due Date</Label>
-          <DateTimeField
-            value={rule.dueAt}
-            onChange={(v) => onChange({ dueAt: v, updatedAt: Date.now() })}
-            placeholder="When due"
-          />
+          <div className="flex items-center gap-2">
+            <EDatetimpicker
+              value={isoToDate(rule.dueAt)}
+              onChange={(v) => onChange({ dueAt: dateToIso(v), updatedAt: Date.now() })}
+              placeholder="When due"
+              className="min-w-0 flex-[3]"
+              hourFormat={12}
+              timeInterval={15}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleResetField("dueAt")}
+              disabled={!rule.dueAt}
+              className="h-9 flex-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Reset Due Date"
+            >
+              <RotateCcw className="mr-1 size-3.5" />
+              Reset
+            </Button>
+          </div>
         </div>
         <div className="grid gap-2">
           <Label>Available Until</Label>
-          <DateTimeField
-            value={rule.untilAt}
-            onChange={(v) => onChange({ untilAt: v, updatedAt: Date.now() })}
-            placeholder="When closes"
-          />
+          <div className="flex items-center gap-2">
+            <EDatetimpicker
+              value={isoToDate(rule.untilAt)}
+              onChange={(v) => onChange({ untilAt: dateToIso(v), updatedAt: Date.now() })}
+              placeholder="When closes"
+              className="min-w-0 flex-[3]"
+              hourFormat={12}
+              timeInterval={15}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleResetField("untilAt")}
+              disabled={!rule.untilAt}
+              className="h-9 flex-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Reset Available Until"
+            >
+              <RotateCcw className="mr-1 size-3.5" />
+              Reset
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+      <div className="mt-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-3">
+        <TriangleAlert className="size-4 shrink-0 text-warning" />
+        <Label className="flex-1 cursor-pointer text-sm" htmlFor={`notify-${rule.id}`}>
+          Notify learners affected by this rule
+        </Label>
         <Switch
           id={`notify-${rule.id}`}
           checked={rule.notify}
           onCheckedChange={(v) => onChange({ notify: v })}
         />
-        <Label className="cursor-pointer text-sm" htmlFor={`notify-${rule.id}`}>
-          Notify learners affected by this rule
-        </Label>
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

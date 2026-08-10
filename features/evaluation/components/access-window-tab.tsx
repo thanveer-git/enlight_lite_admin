@@ -23,7 +23,7 @@ import { Clock, Lock, Unlock } from "lucide-react";
 import { ECard } from "@/components/composite/e-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DateTimeField } from "@/components/ui/date-time-field";
+import { EDatetimpicker } from "@/components/ui/edatetimpicker";
 import { Label } from "@/components/ui/label";
 
 import { cn } from "@/lib/utils";
@@ -50,6 +50,13 @@ export interface AccessWindowEditorProps {
   /** Patches the resolved window. Caller wires it into the eval store. */
   onChange: (next: AccessWindowModel) => void;
 }
+
+// AccessWindowModel stores timestamps as ISO strings; EDatetimpicker works
+// with Date values, so adapt across the boundary.
+const isoToDate = (v: string | null): Date | undefined =>
+  v ? new Date(v) : undefined;
+const dateToIso = (d: Date | undefined): string | null =>
+  d ? d.toISOString() : null;
 
 /**
  * Compute the resolved access window for an attempt. Falls back to
@@ -223,9 +230,11 @@ export function AccessWindowEditor({ attempt, onChange }: AccessWindowEditorProp
             label="Available From"
             helper="Learner cannot submit before this time."
           >
-            <DateTimeField
-              value={draft.availableAt}
-              onChange={(v) => updateField({ availableAt: v })}
+            <EDatetimpicker
+              value={isoToDate(draft.availableAt)}
+              onChange={(v) => updateField({ availableAt: dateToIso(v) })}
+              hourFormat={12}
+              timeInterval={15}
             />
           </FieldGroup>
           <FieldGroup
@@ -233,20 +242,22 @@ export function AccessWindowEditor({ attempt, onChange }: AccessWindowEditorProp
             helper="Submission after this time is late."
             required
           >
-            <DateTimeField
-              value={draft.dueAt}
-              onChange={(v) => updateField({ dueAt: v ?? attempt.dueAt })}
-              emphasis={false}
+            <EDatetimpicker
+              value={isoToDate(draft.dueAt)}
+              onChange={(v) => updateField({ dueAt: dateToIso(v) ?? attempt.dueAt })}
+              hourFormat={12}
+              timeInterval={15}
             />
           </FieldGroup>
           <FieldGroup
             label="Until"
             helper="Hard close — submission is blocked after this time."
           >
-            <DateTimeField
-              value={draft.untilAt}
-              onChange={(v) => updateField({ untilAt: v })}
-              emphasis={isClosed}
+            <EDatetimpicker
+              value={isoToDate(draft.untilAt)}
+              onChange={(v) => updateField({ untilAt: dateToIso(v) })}
+              hourFormat={12}
+              timeInterval={15}
             />
           </FieldGroup>
         </div>
