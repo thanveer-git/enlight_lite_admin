@@ -120,7 +120,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={false}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -136,7 +136,9 @@ export function SearchableSelect(props: SearchableSelectProps) {
           <span className={cn("line-clamp-1", !triggerLabel && "text-muted-foreground")}>
             {triggerLabel ?? placeholder}
           </span>
-          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+          <span className="flex shrink-0 items-center">
+            <ChevronDown className="h-4 w-4 opacity-50" />
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -185,13 +187,15 @@ export function SearchableSelect(props: SearchableSelectProps) {
                     selected && "bg-accent/50",
                   )}
                 >
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={() => toggle(opt.value)}
-                    tabIndex={-1}
-                    aria-hidden
-                    className="pointer-events-none"
-                  />
+                  {multiple && (
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={() => toggle(opt.value)}
+                      tabIndex={-1}
+                      aria-hidden
+                      className="pointer-events-none"
+                    />
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate">{opt.label}</span>
                     {opt.description && (

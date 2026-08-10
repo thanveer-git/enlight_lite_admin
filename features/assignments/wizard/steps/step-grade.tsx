@@ -20,7 +20,6 @@ import {
   type GradeType,
 } from "@/features/assignments/wizard/types";
 import {
-  GRADE_SCALES,
   builtInGradeScales,
   findGradeScale,
   letterGradeScales,
@@ -119,12 +118,13 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
   }, [draft.useRubric, isUnscored]);
 
   const allowedScales = useMemo(() => {
-    if (!draft.useRubric) return GRADE_SCALES;
+    if (!draft.useRubric) return letterGradeScales();
     if (isUnscored) {
       const suggested = findGradeScale(suggestedScaleId);
-      return suggested ? [suggested] : [];
+      if (!suggested) return [];
+      return suggested.meta?.gradeType === "letter_grading" ? [suggested] : [];
     }
-    return GRADE_SCALES;
+    return letterGradeScales();
   }, [draft.useRubric, isUnscored, suggestedScaleId]);
 
   const onToggleRubric = (next: boolean) => {
@@ -206,10 +206,10 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
                     type="button"
                     onClick={() => onSelectRubric(r)}
                     className={cn(
-                      "flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                      "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors",
                       active
                         ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-transparent hover:bg-accent/40",
+                        : "border-transparent hover:border-primary/40 hover:bg-primary/5",
                     )}
                   >
                     <div className="grid gap-0.5">
@@ -265,7 +265,7 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
                       "flex flex-col gap-1 rounded-md border bg-card p-3 text-left transition-colors",
                       active
                         ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "hover:border-foreground/20",
+                        : "hover:border-primary/40 hover:bg-primary/5",
                     )}
                   >
                     <span className="font-medium text-foreground">{GRADE_TYPE_LABELS[gt]}</span>
@@ -309,10 +309,10 @@ export function StepGrade({ draft, onPatch }: StepGradeProps) {
                     type="button"
                     onClick={() => onSelectScale(s.id)}
                     className={cn(
-                      "flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                      "flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors",
                       active
                         ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-transparent hover:bg-accent/40",
+                        : "border-transparent hover:border-primary/40 hover:bg-primary/5",
                     )}
                   >
                     <div className="grid gap-0.5">

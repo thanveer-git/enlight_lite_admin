@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { Breadcrumb, type BreadcrumbItem } from "@/components/composite/breadcrumb";
 import { PageHeader } from "@/components/composite/page-header";
@@ -42,15 +42,33 @@ export function WizardPage({
   const currentIdx = steps ? steps.findIndex((s) => s.id === currentStep) : 0;
   const safeIdx = currentIdx === -1 ? 0 : currentIdx;
 
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const stepperRef = useRef<HTMLOListElement | null>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const stepper = stepperRef.current;
+    if (!sentinel || !stepper) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => stepper.setAttribute("data-stuck", entry.isIntersecting ? "false" : "true"),
+      { threshold: [1] },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [steps, currentStep]);
+
   return (
     <div className={cn("flex min-w-0 flex-col gap-6", className)}>
       {breadcrumbs && <Breadcrumb items={breadcrumbs} />}
       <PageHeader title={title} description={description} />
 
       {!children && steps && currentStep && (
-        <ol
-          aria-label="Wizard steps"
-          className="flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft"
+        <>
+          <div ref={sentinelRef} aria-hidden className="h-0 w-full" />
+          <ol
+            ref={stepperRef}
+            aria-label="Wizard steps"
+            className="sticky top-0 z-sticky flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft data-[stuck=true]:rounded-t-none"
         >
           {steps.map((step, idx) => {
           const status = idx < safeIdx ? "done" : idx === safeIdx ? "current" : "upcoming";
@@ -120,6 +138,7 @@ export function WizardPage({
           );
         })}
       </ol>
+        </>
       )}
 
       <div className="flex flex-col gap-4">

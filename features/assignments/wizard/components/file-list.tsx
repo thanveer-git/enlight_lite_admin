@@ -43,7 +43,7 @@ export function FileList({ files, onChange }: FileListProps) {
         </label>
       ) : (
         <div className="space-y-2">
-          <ul className="grid gap-1 sm:grid-cols-2">
+          <ul className="grid gap-1">
             {files.map((f) => (
               <li
                 key={f.id}

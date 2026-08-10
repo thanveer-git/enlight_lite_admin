@@ -125,7 +125,7 @@ export function AccessRuleCard({
 
         {rule.audience === "single" && (
           <div className="grid gap-2">
-            <Label htmlFor={`student-${rule.id}`}>Student</Label>
+            <Label htmlFor={`student-${rule.id}`}>Learners</Label>
             <SearchableSelect
               triggerId={`student-${rule.id}`}
               value={rule.studentIds[0] ?? ""}

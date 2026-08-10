@@ -15,7 +15,7 @@
  * `StepReview` components used by the route page so behaviour stays
  * identical between the two entry points.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowLeft, ArrowRight, Save } from "lucide-react";
 
@@ -69,6 +69,21 @@ export function RubricWizard({
   const [draft, setDraft] = useState<RubricDraft | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [maxReachedIdx, setMaxReachedIdx] = useState(0);
+
+  const stepperSentinelRef = useRef<HTMLDivElement | null>(null);
+  const stepperRef = useRef<HTMLOListElement | null>(null);
+  useEffect(() => {
+    const sentinel = stepperSentinelRef.current;
+    const stepper = stepperRef.current;
+    if (!sentinel || !stepper || compact) return;
+    const observer = new IntersectionObserver(
+      ([entry]) =>
+        stepper.setAttribute("data-stuck", entry.isIntersecting ? "false" : "true"),
+      { threshold: [1] },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [compact]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,10 +249,13 @@ export function RubricWizard({
 
   return (
     <div className={cn("flex w-full flex-col gap-4", className)}>
+      {!compact && <div ref={stepperSentinelRef} aria-hidden className="h-0 w-full" />}
       <ol
+        ref={stepperRef}
         aria-label="Wizard steps"
         className={cn(
-          "flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft",
+          "flex w-full items-center gap-2 overflow-x-auto rounded-lg border bg-card p-3 shadow-soft data-[stuck=true]:rounded-t-none",
+          !compact && "sticky top-0 z-sticky",
           compact && "p-2",
         )}
       >

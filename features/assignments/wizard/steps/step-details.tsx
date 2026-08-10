@@ -6,6 +6,7 @@ import { RichTextEditor } from "@/components/composite/rich-text-editor";
 import { FormSection } from "@/components/composite/form-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { FileList } from "@/features/assignments/wizard/components/file-list";
 import type { AssignmentDraft } from "@/features/assignments/wizard/types";
 import { SECTIONS } from "@/features/assignments/seed";
@@ -54,19 +55,15 @@ export function StepDetails({ draft, onPatch }: StepDetailsProps) {
         <div className="grid items-start gap-2 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="asg-section">Section *</Label>
-            <select
-              id="asg-section"
+            <SearchableSelect
+              triggerId="asg-section"
               value={draft.sectionId ?? ""}
-              onChange={(e) => onPatch({ sectionId: e.target.value || null })}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="">Select a section…</option>
-              {SECTIONS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onPatch({ sectionId: v || null })}
+              options={SECTIONS.map((s) => ({ value: s.id, label: s.name }))}
+              placeholder="Select a section…"
+              searchPlaceholder="Search sections…"
+              emptyMessage="No sections found."
+            />
           </div>
 
           <div className="grid gap-2">
@@ -84,33 +81,37 @@ export function StepDetails({ draft, onPatch }: StepDetailsProps) {
               }
             />
             <p className="text-xs text-muted-foreground">
-              Use 0 for no limit. Learners are blocked from submitting over this count.
+              Use 0 for no limit. Learners can still submit over the word count, but they&apos;ll see a warning before submitting.
             </p>
           </div>
         </div>
       </FormSection>
 
-      <FormSection
-        title="Content & instructions"
-        description="The brief learners will read before submitting."
-      >
-        <div className="grid gap-2">
-          <Label>Instructions</Label>
-          <RichTextEditor
-            value={draft.content}
-            onChange={(html) => onPatch({ content: html })}
-            placeholder="Describe what learners should do, rubric expectations, and submission requirements."
-            minHeight={160}
-          />
-        </div>
-      </FormSection>
+      <div className="grid gap-6 lg:grid-cols-4">
+        <FormSection
+          className="lg:col-span-3"
+          title="Content & instructions"
+          description="The brief learners will read before submitting."
+        >
+          <div className="grid gap-2">
+            <Label>Instructions</Label>
+            <RichTextEditor
+              value={draft.content}
+              onChange={(html) => onPatch({ content: html })}
+              placeholder="Describe what learners should do, rubric expectations, and submission requirements."
+              minHeight={160}
+            />
+          </div>
+        </FormSection>
 
-      <FormSection
-        title="Attached files"
-        description="Optional resources students can download alongside the assignment."
-      >
-        <FileList files={draft.files} onChange={(files) => onPatch({ files })} />
-      </FormSection>
+        <FormSection
+          className="lg:col-span-1"
+          title="Attached files"
+          description="Optional resources students can download alongside the assignment."
+        >
+          <FileList files={draft.files} onChange={(files) => onPatch({ files })} />
+        </FormSection>
+      </div>
     </div>
   );
 }

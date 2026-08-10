@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Separator } from "@/components/ui/separator";
 
 import {
@@ -40,15 +41,15 @@ function FieldRow({ fieldKey, field }: { fieldKey: string; field: ResolvedField 
   return (
     <div className="rounded-md border bg-background p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {FIELD_LABELS[fieldKey]}
         </span>
         {field.by ? (
-          <Badge variant="outline" className="capitalize">
+          <Badge variant="outline" className="shrink-0 capitalize">
             {field.by}
           </Badge>
         ) : (
-          <span className="text-[11px] text-muted-foreground">no rule</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">no rule</span>
         )}
       </div>
       <p className="mt-1 text-sm font-medium">{display}</p>
@@ -112,26 +113,23 @@ export function ResolvedPreview({ rules, className }: ResolvedPreviewProps) {
           <DialogHeader>
             <DialogTitle>Simulate access</DialogTitle>
             <DialogDescription>
-              Pick a student to see the resolved dates from the rules above.
+              Pick a learner to see the resolved dates from the rules above.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center gap-3">
-            <Label htmlFor="preview-student" className="shrink-0 text-sm">
-              Student
+            <Label htmlFor="preview-student" className="shrink-0 self-center text-sm leading-none">
+              Learners
             </Label>
-            <select
-              id="preview-student"
+            <SearchableSelect
+              className="flex-1"
+              triggerId="preview-student"
+              placeholder="Select a learner…"
+              searchPlaceholder="Search learners…"
               value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {STUDENTS.map((s: StudentLite) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              onChange={setStudentId}
+              options={STUDENTS.map((s: StudentLite) => ({ value: s.id, label: s.name }))}
+            />
           </div>
 
           <Separator />

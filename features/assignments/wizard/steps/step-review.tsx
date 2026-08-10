@@ -36,14 +36,6 @@ const STEP_LABEL: Record<ValidationStep, string> = {
   review: "Step 5",
 };
 
-const STEP_TITLE: Record<ValidationStep, string> = {
-  details: "Details",
-  grade: "Grade",
-  outcomes: "Outcomes",
-  access: "Access & deadline",
-  review: "Review",
-};
-
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -241,7 +233,7 @@ function Section({ title, step, onJumpToStep, actions, children }: SectionProps)
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             <Edit3 className="size-3" />
-            Edit {STEP_LABEL[step]} · {STEP_TITLE[step]}
+            Edit {STEP_LABEL[step]}
           </button>
         </div>
       </div>
