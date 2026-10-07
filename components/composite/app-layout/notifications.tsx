@@ -175,7 +175,7 @@ export function Notifications() {
               <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                 <Bell className="size-5 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium">You're all caught up</p>
+              <p className="text-sm font-medium">You&apos;re all caught up</p>
               <p className="text-xs text-muted-foreground">
                 New notifications will appear here.
               </p>

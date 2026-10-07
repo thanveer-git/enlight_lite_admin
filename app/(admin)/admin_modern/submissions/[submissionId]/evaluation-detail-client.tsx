@@ -304,7 +304,6 @@ function AccessWindowTab({
   // Resolve a complete window. Falls back to attempt fields; missing
   // fields stay null and the editor renders blanks for them.
   const seed = resolveAccessWindow(attempt);
-  const model = accessWindow ?? seed;
 
   return (
     <AccessWindowEditor

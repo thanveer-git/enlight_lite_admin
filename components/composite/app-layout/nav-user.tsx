@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Monitor, Moon, Sun, ChevronDown, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 

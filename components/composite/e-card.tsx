@@ -72,7 +72,7 @@ const ECardRoot = React.forwardRef<HTMLDivElement, ECardRootProps>(
 );
 ECardRoot.displayName = "ECard";
 
-interface ECardSectionProps extends React.HTMLAttributes<HTMLDivElement> {}
+type ECardSectionProps = React.HTMLAttributes<HTMLDivElement>;
 
 const ECardHeader = React.forwardRef<HTMLDivElement, ECardSectionProps>(
   ({ className, ...props }, ref) => {
