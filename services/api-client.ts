@@ -1,65 +1,22 @@
-import { FAKE_RUBRICS } from "@/services/handlers/rubrics";
-import { FAKE_RUBRIC_DETAILS } from "@/services/handlers/rubric-details";
 import { FAKE_CURRENT_USER, FAKE_USERS } from "@/services/handlers/users";
 import { FAKE_ASSIGNMENTS } from "@/features/assignments/seed";
-import type { AssignmentDraft, AssignmentStatus } from "@/features/assignments/wizard/types";
+import type { AssignmentDraft } from "@/features/assignments/wizard/types";
 import { EMPTY_DRAFT } from "@/features/assignments/wizard/types";
 import type { RubricDraft } from "@/features/rubrics/wizard/types";
-import type { Rubric, RubricDetail, RubricMatrix, RubricStatus, RubricType } from "@/types/rubric";
+import type { Rubric, RubricDetail, RubricMatrix, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
 import type { User } from "@/types/session";
 import type { PaginatedResponse } from "@/types/table";
+import { backendFetch, buildQuery, ApiError } from "@/services/api-helpers";
+import { ENDPOINTS } from "@/services/endpoints";
 
 const SIMULATED_LATENCY_MS = 250;
+const rubricInFlight = new Map<string, Promise<RubricDetail | null>>();
 
 function delay<T>(value: T, ms = SIMULATED_LATENCY_MS): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim();
-}
-
-function fallbackMatrix(row: Rubric): RubricMatrix {
-  const safeCriteria = Math.max(0, row.criteriaCount);
-  const safeLevels = Math.max(0, row.levelsCount);
-  const criteria = Array.from({ length: safeCriteria }, (_, idx) => ({
-    id: `c-${row.id}-${idx}`,
-    name: `Criterion ${idx + 1}`,
-    weight: row.type === "scored" ? 1 : null,
-  }));
-  const levels = Array.from({ length: safeLevels }, (_, idx) => ({
-    id: `l-${row.id}-${idx}`,
-    name: `Level ${idx + 1}`,
-    points:
-      row.type === "scored"
-        ? {
-            type: "single" as const,
-            value: Math.max(0, 100 - idx * 25),
-            min: null,
-            max: null,
-          }
-        : null,
-  }));
-  return {
-    criteria,
-    levels,
-    descriptions: {},
-    gradingMethod: row.type === "scored" ? "weighted_average" : "grade_profile",
-    profileRules: [],
-    profileFallback: false,
-    minPassLevelId: null,
-    suggestedScaleId: null,
-  };
-}
-
-function withMatrix(row: Rubric): RubricDetail {
-  const explicit = FAKE_RUBRIC_DETAILS[row.id];
-  if (explicit) return { ...explicit, matrix: explicit.matrix };
-  return { ...row, matrix: fallbackMatrix(row) };
-}
+export { ApiError };
 
 export interface ListUsersParams {
   page?: number;
@@ -74,6 +31,9 @@ export interface ListRubricsParams {
   search?: string;
   status?: string[];
   type?: string[];
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+  needCount?: boolean;
 }
 
 export interface CreateRubricPayload {
@@ -92,7 +52,6 @@ export interface UpdateRubricPayload {
   matrix?: RubricMatrix;
 }
 
-/** Empty matrix used when creating a brand-new rubric. */
 function emptyMatrix(type: RubricType): RubricMatrix {
   return {
     criteria: [],
@@ -107,6 +66,8 @@ function emptyMatrix(type: RubricType): RubricMatrix {
 }
 
 export const apiClient = {
+  // ── Users (still mock) ──────────────────────────────────────────────
+
   async getCurrentUser(): Promise<User> {
     return delay(FAKE_CURRENT_USER);
   },
@@ -125,16 +86,9 @@ export const apiClient = {
       }
       return true;
     });
-
     const start = (page - 1) * pageSize;
     const data = filtered.slice(start, start + pageSize);
-
-    return delay({
-      data,
-      total: filtered.length,
-      page,
-      pageSize,
-    });
+    return delay({ data, total: filtered.length, page, pageSize });
   },
 
   async getUser(id: string): Promise<User | null> {
@@ -142,135 +96,117 @@ export const apiClient = {
     return delay(user);
   },
 
+  // ── Rubrics (live API) ──────────────────────────────────────────────
+
+  async listRubrics(
+    params: ListRubricsParams = {},
+  ): Promise<PaginatedResponse<Rubric> & { counts?: RubricCounts }> {
+    const qs = buildQuery({
+      search: params.search,
+      status: params.status,
+      type: params.type,
+      page: params.page,
+      pageSize: params.pageSize,
+      sort_by: params.sortBy,
+      sort_dir: params.sortDir,
+      need_count: params.needCount ? "1" : undefined,
+    });
+    return backendFetch<PaginatedResponse<Rubric> & { counts?: RubricCounts }>(
+      ENDPOINTS.rubrics.list + qs,
+    );
+  },
+
   async getRubric(id: string): Promise<RubricDetail | null> {
-    const row = FAKE_RUBRICS.find((r) => r.id === id);
-    if (!row) return delay(null);
-    return delay(withMatrix(row));
+    const existing = rubricInFlight.get(id);
+    if (existing) return existing;
+    const promise = backendFetch<RubricDetail>(ENDPOINTS.rubrics.detail(id))
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      })
+      .finally(() => rubricInFlight.delete(id));
+    rubricInFlight.set(id, promise);
+    return promise;
   },
 
   async getRubricsByIds(ids: string[]): Promise<RubricDetail[]> {
-    const out: RubricDetail[] = [];
-    for (const id of ids) {
-      const row = FAKE_RUBRICS.find((r) => r.id === id);
-      if (row) out.push(withMatrix(row));
-    }
-    return delay(out);
-  },
-
-  async listRubrics(params: ListRubricsParams = {}): Promise<PaginatedResponse<Rubric>> {
-    const { page = 1, pageSize = 10, search, status, type } = params;
-    const needle = search?.trim().toLowerCase();
-    const filtered = FAKE_RUBRICS.filter((r) => {
-      if (
-        needle &&
-        !r.name.toLowerCase().includes(needle) &&
-        !r.description.toLowerCase().includes(needle)
-      ) {
-        return false;
-      }
-      if (status && status.length > 0 && !status.includes(r.status)) return false;
-      if (type && type.length > 0 && !type.includes(r.type)) return false;
-      return true;
-    });
-
-    const start = (page - 1) * pageSize;
-    const data = filtered.slice(start, start + pageSize);
-
-    return delay({
-      data,
-      total: filtered.length,
-      page,
-      pageSize,
-    });
+    const results = await Promise.all(
+      ids.map((id) => apiClient.getRubric(id)),
+    );
+    return results.filter((r): r is RubricDetail => r !== null);
   },
 
   async createRubric(payload: CreateRubricPayload): Promise<Rubric> {
-    const plainOutcome = stripHtml(payload.outcome);
-    const newRubric: Rubric = {
-      id: `rb_${Date.now()}`,
-      name: payload.name,
-      description: plainOutcome.slice(0, 140),
-      outcome: payload.outcome,
-      status: payload.status,
-      type: payload.type,
-      criteriaCount: payload.matrix?.criteria.length ?? 0,
-      levelsCount: payload.matrix?.levels.length ?? 0,
-      usedBy: 0,
-      updatedAt: new Date().toISOString(),
-      createdBy: FAKE_CURRENT_USER.name,
-    };
-    FAKE_RUBRICS.unshift(newRubric);
-    return delay(newRubric);
+    return backendFetch<Rubric>(ENDPOINTS.rubrics.list, {
+      method: "POST",
+      body: payload,
+    });
   },
 
   async updateRubric(
     id: string,
     payload: UpdateRubricPayload,
   ): Promise<Rubric | null> {
-    const idx = FAKE_RUBRICS.findIndex((r) => r.id === id);
-    if (idx === -1) return delay(null);
-    const plainOutcome = stripHtml(payload.outcome);
-    const updated: Rubric = {
-      ...FAKE_RUBRICS[idx]!,
-      name: payload.name,
-      description: plainOutcome.slice(0, 140),
-      outcome: payload.outcome,
-      status: payload.status,
-      type: payload.type,
-      criteriaCount: payload.matrix?.criteria.length ?? 0,
-      levelsCount: payload.matrix?.levels.length ?? 0,
-      updatedAt: new Date().toISOString(),
-    };
-    // Also refresh the detail cache so subsequent reads see the new
-    // matrix.
-    FAKE_RUBRIC_DETAILS[id] = {
-      ...updated,
-      matrix: payload.matrix ?? fallbackMatrix(updated),
-    };
-    FAKE_RUBRICS[idx] = updated;
-    return delay(updated);
+    try {
+      return await backendFetch<Rubric>(ENDPOINTS.rubrics.detail(id), {
+        method: "PATCH",
+        body: payload,
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
   },
 
-  /**
-   * Returns a wizard-ready `RubricDraft` for the given id. Passing `0`
-   * or an unknown id yields a blank draft with an empty matrix, which is
-   * the starting state for the create flow.
-   */
+  async deleteRubric(id: string): Promise<void> {
+    await backendFetch(ENDPOINTS.rubrics.detail(id), { method: "DELETE" });
+  },
+
+  async duplicateRubric(id: string): Promise<Rubric> {
+    return backendFetch<Rubric>(ENDPOINTS.rubrics.duplicate(id), {
+      method: "POST",
+    });
+  },
+
+  async changeRubricStatus(id: string, status: RubricStatus): Promise<Rubric> {
+    return backendFetch<Rubric>(ENDPOINTS.rubrics.changeStatus(id), {
+      method: "PATCH",
+      body: { status },
+    });
+  },
+
   async getRubricDraft(id: string | number): Promise<RubricDraft> {
     if (id === 0 || id === "0") {
-      return delay({
+      return {
         name: "",
         outcome: "",
         type: null,
         matrix: emptyMatrix("scored"),
-      });
+      };
     }
-    const row = FAKE_RUBRICS.find((r) => r.id === String(id));
-    if (!row) {
-      return delay({
+    const detail = await apiClient.getRubric(String(id));
+    if (!detail) {
+      return {
         name: "",
         outcome: "",
         type: null,
         matrix: emptyMatrix("scored"),
-      });
+      };
     }
-    const detail = withMatrix(row);
-    return delay({
+    return {
       name: detail.name,
       outcome: detail.outcome,
       type: detail.type,
       matrix: detail.matrix,
-    });
+    };
   },
 
-  // ── Assignments ─────────────────────────────────────────────────────
+  // ── Assignments (still mock) ────────────────────────────────────────
 
   async getAssignmentDraft(id: string | number): Promise<AssignmentDraft> {
     if (id === 0 || id === "0") return delay(EMPTY_DRAFT());
     const row = FAKE_ASSIGNMENTS.find((a) => a.id === String(id));
     if (!row) return delay(EMPTY_DRAFT());
-    // Deep clone so the wizard's local state mutations don't leak into
-    // the shared seed array.
     return delay(JSON.parse(JSON.stringify(row)) as AssignmentDraft);
   },
 

@@ -17,6 +17,14 @@ export interface EvaluateRubricInput {
    * the engine falls back to the legacy 50% rule.
    */
   totalMarks?: number | null;
+  /**
+   * When true, the weighted percentage is rounded to a whole number
+   * before the grade-scale band lookup. The Live Console sets this so
+   * that boundary values (e.g. 74.6%) resolve the same way the backend
+   * does; the Simulator leaves it off to keep full precision for its
+   * step-by-step narrative.
+   */
+  roundPercentageBeforeBandLookup?: boolean;
 }
 
 export interface CriterionEvaluation {

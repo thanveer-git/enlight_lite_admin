@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,14 +33,16 @@ import {
 } from "@/features/rubrics/grade-scale-validation";
 import {
   createGradeScale,
-  fetchGradeScale,
+  fetchGradeScaleWithBands,
   updateGradeScale,
 } from "@/features/rubrics/grade-scales";
 import { FormPage } from "@/templates/form-page";
+import { queryKeys } from "@/lib/query-keys";
 import type { GradeScaleStatus } from "@/features/rubrics/constants";
 
 export default function GradeScaleFormPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "0";
   const isEdit = id !== "0";
@@ -51,11 +54,10 @@ export default function GradeScaleFormPage() {
   const [usedCount, setUsedCount] = useState<number | undefined>(undefined);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
-  // Initial load: pull the existing scale (or seed an empty draft for create).
   useEffect(() => {
     let cancelled = false;
     if (isEdit) {
-      fetchGradeScale(id).then((scale) => {
+      fetchGradeScaleWithBands(id).then((scale) => {
         if (cancelled) return;
         if (!scale) {
           setNotFound(true);
@@ -118,13 +120,13 @@ export default function GradeScaleFormPage() {
     });
   };
 
-  const handleSave = (status: GradeScaleStatus) => {
+  const handleSave = async (status: GradeScaleStatus) => {
     if (!draft) return;
     setSaving(true);
     try {
       const payload = draftToScaleInput(draft);
       if (isEdit) {
-        const updated = updateGradeScale(id, { ...payload, status });
+        const updated = await updateGradeScale(id, { ...payload, status });
         if (!updated) {
           toast.error("Could not find the grade scale to update.");
           return;
@@ -134,13 +136,16 @@ export default function GradeScaleFormPage() {
           { description: updated.name },
         );
       } else {
-        const created = createGradeScale({ ...payload, status });
+        const created = await createGradeScale({ ...payload, status });
         toast.success(
           status === "published" ? "Grade scale published" : "Grade scale saved as draft",
           { description: created.name },
         );
       }
+      queryClient.invalidateQueries({ queryKey: queryKeys.gradeScales.all });
       router.push(ROUTES.admin.grading.all);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save grade scale");
     } finally {
       setSaving(false);
     }

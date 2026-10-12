@@ -1,22 +1,30 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { SortingState } from "@tanstack/react-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, Send, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/composite/data-table/data-table";
+import { ConfirmDialog } from "@/components/composite/confirm-dialog";
 import { FilterPopover } from "@/components/composite/filter-popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
-import { fetchGradeScales } from "@/features/rubrics/grade-scales";
+import {
+  fetchGradeScales,
+  deleteGradeScale,
+  changeGradeScaleStatus,
+  ApiError,
+} from "@/features/rubrics/grade-scales";
 import { getGradeScaleColumns } from "@/features/rubrics/grade-scale-columns";
 import { GradeScaleKpiSummary } from "@/features/rubrics/grade-scale-kpi-summary";
 import { GradeScalePreviewDialog } from "@/features/rubrics/grade-scale-preview-dialog";
+import type { GradeScaleCounts } from "@/features/rubrics/grade-scales";
 import type {
   GradeScale,
   GradeScaleStatus,
@@ -45,85 +53,123 @@ const PASS_FAIL_FILTERS: { value: PassFailFilter; label: string; tone: string }[
   { value: "disabled", label: "Disabled", tone: "bg-zinc-100 text-zinc-700 ring-1 ring-inset ring-zinc-200" },
 ];
 
+const EMPTY_COUNTS: GradeScaleCounts = {
+  total: 0,
+  status: { draft: 0, published: 0, archived: 0 },
+  gradeType: { percentage: 0, cgpa: 0, marks: 0, comp_incomp: 0, letter_grading: 0 },
+  passFail: { enabled: 0, disabled: 0 },
+};
+
 export default function GradingPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [types, setTypes] = useState<GradeScaleType[]>([]);
   const [statuses, setStatuses] = useState<GradeScaleStatus[]>([]);
   const [passFail, setPassFail] = useState<PassFailFilter[]>([]);
   const [previewing, setPreviewing] = useState<GradeScale | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [counts, setCounts] = useState<GradeScaleCounts>(EMPTY_COUNTS);
+
+  const [pendingDelete, setPendingDelete] = useState<GradeScale | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<{ scale: GradeScale; nextStatus: GradeScaleStatus } | null>(null);
+  const [changingStatus, setChangingStatus] = useState(false);
 
   const debounced = useDebounce(search, 250);
 
+  const sortBy = sorting[0]?.id ?? "";
+  const sortDir = sorting.length > 0
+    ? (sorting[0]?.desc ? "desc" : "asc") as "asc" | "desc"
+    : undefined;
+
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, types, statuses, passFail, sortBy, sortDir]);
+
+  const needCount = page === 1 || counts.total === 0;
+
   const q = useQuery({
-    queryKey: queryKeys.gradeScales.list(),
-    queryFn: fetchGradeScales,
+    queryKey: queryKeys.gradeScales.list({
+      search: debounced,
+      gradeType: types,
+      status: statuses,
+      passFail,
+      page,
+      pageSize,
+      sortBy,
+      sortDir,
+    }),
+    queryFn: () =>
+      fetchGradeScales({
+        search: debounced,
+        gradeType: types,
+        status: statuses,
+        passFail,
+        page,
+        pageSize,
+        sortBy,
+        sortDir,
+        needCount,
+      }),
   });
 
-  const allScales = q.data ?? [];
-
-  const filtered = useMemo(() => {
-    const q_ = debounced.trim().toLowerCase();
-    return allScales.filter((s) => {
-      if (types.length && (!s.meta || !types.includes(s.meta.gradeType))) {
-        return false;
-      }
-      if (statuses.length && (!s.meta || !statuses.includes(s.meta.status))) {
-        return false;
-      }
-      if (passFail.length) {
-        const isLetter = s.meta?.gradeType === "letter_grading";
-        const matches = passFail.some((v) =>
-          v === "enabled" ? isLetter : !isLetter,
-        );
-        if (!matches) return false;
-      }
-      if (q_ && !s.name.toLowerCase().includes(q_)) return false;
-      return true;
-    });
-  }, [allScales, debounced, types, statuses, passFail]);
-
-  const typeCounts = useMemo(() => {
-    const counts: Record<GradeScaleType, number> = {
-      percentage: 0,
-      cgpa: 0,
-      marks: 0,
-      comp_incomp: 0,
-      letter_grading: 0,
-    };
-    for (const s of allScales) {
-      if (s.meta) counts[s.meta.gradeType] += 1;
+  useEffect(() => {
+    if (q.data?.counts) {
+      setCounts(q.data.counts);
     }
-    return counts;
-  }, [allScales]);
+  }, [q.data?.counts]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<GradeScaleStatus, number> = {
-      draft: 0,
-      published: 0,
-      in_use: 0,
-      archived: 0,
-    };
-    for (const s of allScales) {
-      if (s.meta) counts[s.meta.status] += 1;
+  const scales = useMemo(() => q.data?.data ?? [], [q.data]);
+
+  const letterGradeCount = counts.gradeType.letter_grading;
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.gradeScales.all });
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await deleteGradeScale(pendingDelete.id);
+      toast.success("Grade scale deleted", { description: pendingDelete.name });
+      setPendingDelete(null);
+      invalidate();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to delete grade scale");
+      }
+    } finally {
+      setDeleting(false);
     }
-    return counts;
-  }, [allScales]);
+  };
 
-  const passFailCounts = useMemo(() => {
-    const counts: Record<PassFailFilter, number> = {
-      enabled: 0,
-      disabled: 0,
-    };
-    for (const s of allScales) {
-      const isLetter = s.meta?.gradeType === "letter_grading";
-      counts[isLetter ? "enabled" : "disabled"] += 1;
+  const handleStatusConfirm = async () => {
+    if (!pendingStatus) return;
+    setChangingStatus(true);
+    try {
+      await changeGradeScaleStatus(pendingStatus.scale.id, pendingStatus.nextStatus);
+      toast.success(
+        pendingStatus.nextStatus === "published" ? "Grade scale published" : "Grade scale moved to draft",
+        { description: pendingStatus.scale.name },
+      );
+      setPendingStatus(null);
+      invalidate();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to update grade scale status");
+      }
+    } finally {
+      setChangingStatus(false);
     }
-    return counts;
-  }, [allScales]);
-
-
-  const letterGradeCount = typeCounts.letter_grading;
+  };
 
   const columns = useMemo(
     () =>
@@ -131,6 +177,8 @@ export default function GradingPage() {
         onViewDetails: (s) => setPreviewing(s),
         onWhereUsed: (s) =>
           toast.info("Where used lookup", { description: s.name }),
+        onDelete: (s) => setPendingDelete(s),
+        onStatusChange: (s, next) => setPendingStatus({ scale: s, nextStatus: next }),
       }),
     [],
   );
@@ -138,12 +186,12 @@ export default function GradingPage() {
   const kpiNode = useMemo(
     () => (
       <GradeScaleKpiSummary
-        total={allScales.length}
+        total={counts.total}
         letterGradeCount={letterGradeCount}
-        statusCounts={statusCounts}
+        statusCounts={counts.status}
       />
     ),
-    [allScales.length, letterGradeCount, statusCounts],
+    [counts.total, letterGradeCount, counts.status],
   );
 
   const toolbarNode = useMemo(
@@ -169,7 +217,6 @@ export default function GradingPage() {
           options={GRADE_TYPE_FILTERS.map((o) => ({
             value: o.value,
             label: o.label,
-            count: typeCounts[o.value] ?? 0,
             tone: o.tone,
           }))}
           selected={types}
@@ -180,7 +227,6 @@ export default function GradingPage() {
           options={GRADE_STATUS_FILTERS.map((o) => ({
             value: o.value,
             label: o.label,
-            count: allScales.filter((s) => s.meta?.status === o.value).length,
             tone: o.tone,
           }))}
           selected={statuses}
@@ -191,7 +237,6 @@ export default function GradingPage() {
           options={PASS_FAIL_FILTERS.map((o) => ({
             value: o.value,
             label: o.label,
-            count: passFailCounts[o.value] ?? 0,
             tone: o.tone,
           }))}
           selected={passFail}
@@ -199,7 +244,7 @@ export default function GradingPage() {
         />
       </>
     ),
-    [types, statuses, passFail, typeCounts, passFailCounts, allScales],
+    [types, statuses, passFail, counts],
   );
 
   return (
@@ -221,7 +266,7 @@ export default function GradingPage() {
     >
       <DataTable
         columns={columns}
-        data={filtered}
+        data={scales}
         isLoading={q.isLoading}
         isError={q.isError}
         onRetry={() => q.refetch()}
@@ -230,7 +275,15 @@ export default function GradingPage() {
         enableSelection
         showView={false}
         tableId="grade-scales"
+        page={page}
+        pageSize={pageSize}
+        totalRows={q.data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        sorting={sorting}
+        onSortingChange={setSorting}
       />
+
       <GradeScalePreviewDialog
         scale={previewing}
         onOpenChange={(open) => {
@@ -240,6 +293,43 @@ export default function GradingPage() {
           setPreviewing(null);
           router.push(ROUTES.admin.grading.form(s.id));
         }}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete grade scale?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.name}" will be permanently removed. This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        variant="destructive"
+        icon={Trash2}
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={pendingStatus !== null}
+        onOpenChange={(open) => !open && setPendingStatus(null)}
+        title={
+          pendingStatus?.nextStatus === "published"
+            ? "Publish grade scale?"
+            : "Unpublish grade scale?"
+        }
+        description={
+          pendingStatus
+            ? pendingStatus.nextStatus === "published"
+              ? `"${pendingStatus.scale.name}" will be published and available to attach to assignments.`
+              : `"${pendingStatus.scale.name}" will be moved back to draft and will no longer be available for new assignments.`
+            : undefined
+        }
+        confirmLabel={pendingStatus?.nextStatus === "published" ? "Publish" : "Unpublish"}
+        icon={pendingStatus?.nextStatus === "published" ? Send : Undo2}
+        loading={changingStatus}
+        onConfirm={handleStatusConfirm}
       />
     </ListingPage>
   );

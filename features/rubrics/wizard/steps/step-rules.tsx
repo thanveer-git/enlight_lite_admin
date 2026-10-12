@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AlertTriangle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 
@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { findGradeScale, letterGradeScales } from "@/features/rubrics/constants";
+import { findGradeScale, letterGradeScales, type GradeScale } from "@/features/rubrics/constants";
+import { fetchGradeScaleWithBands, fetchGradeScales } from "@/features/rubrics/grade-scales";
 import { GradeSimulator } from "@/features/rubrics/simulator/grade-simulator";
 import { getRulesValidation } from "@/features/rubrics/wizard/validation";
 import { cn } from "@/lib/utils";
@@ -173,6 +174,19 @@ export function StepRules({ matrix, type, onMatrixChange }: StepRulesProps) {
     return set;
   }, [errors]);
   const suggestedScale = findGradeScale(matrix.suggestedScaleId);
+  const [, forceScaleRefresh] = useState(0);
+  useEffect(() => {
+    fetchGradeScales().then(() => forceScaleRefresh((n) => n + 1)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!matrix.suggestedScaleId) return;
+    const cached = findGradeScale(matrix.suggestedScaleId);
+    if (cached && cached.bands.length > 0) return;
+    fetchGradeScaleWithBands(matrix.suggestedScaleId)
+      .then(() => forceScaleRefresh((n) => n + 1))
+      .catch(() => {});
+  }, [matrix.suggestedScaleId]);
+  const scales = letterGradeScales();
   const [draggingRuleId, setDraggingRuleId] = useState<string | null>(null);
   const [dropTargetRuleId, setDropTargetRuleId] = useState<string | null>(null);
   const [collapsedRules, setCollapsedRules] = useState<Set<string>>(new Set());
@@ -503,7 +517,7 @@ export function StepRules({ matrix, type, onMatrixChange }: StepRulesProps) {
                     CGPA / Marks / Comp/Incomp) are direct grade formats
                     and don't carry bands for the rubric engine to map
                     against. See GRADE_SCALES meta.gradeType. */}
-                {letterGradeScales().map((scale) => (
+                {scales.map((scale) => (
                   <SelectItem key={scale.id} value={scale.id}>
                     {scale.name}
                   </SelectItem>

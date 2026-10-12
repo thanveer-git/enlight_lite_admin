@@ -21,6 +21,8 @@ import { Inbox } from "lucide-react";
 
 import { EmptyState } from "@/components/composite/empty-state";
 import { HorizontalScrollContainer } from "@/components/composite/horizontal-scroll-container";
+import { Pagination } from "@/components/composite/pagination";
+import { PAGE_SIZE_OPTIONS } from "@/constants/table";
 import { DataTableBulkActions } from "@/components/composite/data-table/data-table-toolbar";
 import { DataTableView } from "@/components/composite/data-table/data-table-view";
 import { DataTablePagination } from "@/components/composite/data-table/data-table-pagination";
@@ -59,6 +61,23 @@ export interface DataTableProps<TData, TValue> {
    */
   pageSize?: number;
   /**
+   * When provided (along with `onPageChange` and `totalRows`), the table
+   * switches to server-side pagination: TanStack's client-side pagination
+   * row model is disabled and the parent owns the current page / page
+   * size / total count.
+   */
+  page?: number;
+  totalRows?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  /**
+   * Server-side sorting. When provided (with `onSortingChange`), TanStack's
+   * client-side sort row model is disabled and the parent owns the sort
+   * state — mirroring the server-pagination props above.
+   */
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  /**
    * Stable identifier used to persist column-pinning choices in
    * localStorage. When provided, columns gain a Pin submenu in the
    * header dropdown and pinned columns render sticky on the
@@ -80,9 +99,27 @@ export function DataTable<TData, TValue>({
   showView = true,
   initialSorting = [],
   pageSize = 10,
+  page,
+  totalRows,
+  onPageChange,
+  onPageSizeChange,
+  sorting: sortingProp,
+  onSortingChange,
   tableId,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>(initialSorting);
+  const serverPaginated =
+    page != null && totalRows != null && onPageChange != null;
+  const serverSorted = sortingProp != null && onSortingChange != null;
+  const [localSorting, setLocalSorting] = React.useState<SortingState>(initialSorting);
+  const sorting = serverSorted ? sortingProp : localSorting;
+  // TanStack's onSortingChange may pass an updater function rather than a
+  // value, so resolve both forms before forwarding to the parent.
+  const handleSortingChange = (updaterOrValue: SortingState | ((old: SortingState) => SortingState)) => {
+    const next =
+      typeof updaterOrValue === "function" ? updaterOrValue(localSorting) : updaterOrValue;
+    if (serverSorted) onSortingChange(next);
+    else setLocalSorting(next);
+  };
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
   // Hydrate initial pin state from the persisted store so the first
@@ -168,14 +205,16 @@ export function DataTable<TData, TValue>({
     state: pinEnabled
       ? { sorting, columnVisibility, columnPinning }
       : { sorting, columnVisibility },
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnPinningChange: pinEnabled ? handlePinningChange : undefined,
     enableColumnPinning: pinEnabled,
     getCoreRowModel: getCoreRowModel<TData>(),
-    getSortedRowModel: getSortedRowModel<TData>(),
+    ...(serverSorted ? {} : { getSortedRowModel: getSortedRowModel<TData>() }),
     getFilteredRowModel: getFilteredRowModel<TData>(),
-    getPaginationRowModel: getPaginationRowModel<TData>(),
+    ...(serverPaginated
+      ? {}
+      : { getPaginationRowModel: getPaginationRowModel<TData>() }),
     initialState: { pagination: { pageSize } },
   });
 
@@ -268,7 +307,18 @@ export function DataTable<TData, TValue>({
         </HorizontalScrollContainer>
 
         <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
-          <DataTablePagination table={table} />
+          {serverPaginated ? (
+            <Pagination
+              page={page!}
+              pageSize={pageSize}
+              total={totalRows!}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageChange={onPageChange!}
+              onPageSizeChange={onPageSizeChange}
+            />
+          ) : (
+            <DataTablePagination table={table} />
+          )}
         </div>
       </div>
 

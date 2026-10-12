@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import {
   CheckCircle2,
   CircleDashed,
@@ -25,6 +27,7 @@ import {
   GradeScaleTypeChip,
 } from "@/features/rubrics/grade-scale-chip";
 import type { GradeScale } from "@/features/rubrics/constants";
+import { fetchGradeScaleWithBands } from "@/features/rubrics/grade-scales";
 import { Separator } from "@/components/ui/separator";
 
 export interface GradeScalePreviewDialogProps {
@@ -232,69 +235,107 @@ export function GradeScalePreviewDialog({
 }: GradeScalePreviewDialogProps) {
   const open = scale !== null;
   const editable = scale?.meta?.isEditable ?? false;
+  const [detail, setDetail] = useState<GradeScale | null>(null);
+  const [loadingBands, setLoadingBands] = useState(false);
+
+  // The listing endpoint omits bands, so resolve the full record (with bands)
+  // from the detail endpoint whenever the dialog opens.
+  useEffect(() => {
+    if (!open || !scale) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingBands(true);
+    fetchGradeScaleWithBands(scale.id)
+      .then((full) => {
+        if (!cancelled) setDetail(full);
+      })
+      .catch(() => {
+        if (!cancelled) setDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingBands(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, scale]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-        {scale && (
-          <>
-            <DialogHeader>
-              <div className="flex items-start gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                  <GraduationCap className="size-5" aria-hidden />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <DialogTitle className="text-base">{scale.name}</DialogTitle>
-                  <DialogDescription className="mt-1">
-                    {scale.meta?.description ?? "Built-in grade scale."}
-                  </DialogDescription>
-                </div>
-              </div>
-              <div className="pt-2">
-                <StatusMetaRow scale={scale} />
-              </div>
-            </DialogHeader>
-
-            <div className="flex flex-col gap-5">
-              <ConfigurationBlock scale={scale} />
-              <BandsBlock scale={scale} />
-
-              <section className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-                  <Type className="size-4 text-muted-foreground" aria-hidden />
-                  <span className="text-xs text-muted-foreground">ID</span>
-                  <span className="ml-auto truncate text-xs font-mono text-foreground">
-                    {scale.id}
+        {scale && (() => {
+          const view = detail ?? scale;
+          return (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                    <GraduationCap className="size-5" aria-hidden />
                   </span>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="text-base">{scale.name}</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      {scale.meta?.description ?? "Built-in grade scale."}
+                    </DialogDescription>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-                  <FileCheck2 className="size-4 text-muted-foreground" aria-hidden />
-                  <span className="text-xs text-muted-foreground">Bands</span>
-                  <span className="ml-auto text-xs font-medium text-foreground">
-                    {scale.bands.length || "—"}
-                  </span>
+                <div className="pt-2">
+                  <StatusMetaRow scale={scale} />
                 </div>
-              </section>
-            </div>
+              </DialogHeader>
 
-            <Separator />
+              <div className="flex flex-col gap-5">
+                <ConfigurationBlock scale={view} />
+                {loadingBands && !detail ? (
+                  <p
+                    id="grade_scale_preview_bands_loading"
+                    className="text-sm text-muted-foreground"
+                  >
+                    Loading bands…
+                  </p>
+                ) : (
+                  <BandsBlock scale={view} />
+                )}
 
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Close
-              </Button>
-              {editable && onEdit && (
-                <Button onClick={() => onEdit(scale)}>
-                  <Pencil className="mr-1.5 size-4" />
-                  Edit Scale
+                <section className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                    <Type className="size-4 text-muted-foreground" aria-hidden />
+                    <span className="text-xs text-muted-foreground">ID</span>
+                    <span className="ml-auto truncate text-xs font-mono text-foreground">
+                      {scale.id}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                    <FileCheck2 className="size-4 text-muted-foreground" aria-hidden />
+                    <span className="text-xs text-muted-foreground">Bands</span>
+                    <span className="ml-auto text-xs font-medium text-foreground">
+                      {view.bands.length || "—"}
+                    </span>
+                  </div>
+                </section>
+              </div>
+
+              <Separator />
+
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Close
                 </Button>
-              )}
-            </DialogFooter>
-          </>
-        )}
+                {editable && onEdit && (
+                  <Button onClick={() => onEdit(scale)}>
+                    <Pencil className="mr-1.5 size-4" />
+                    Edit Scale
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );

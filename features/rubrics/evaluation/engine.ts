@@ -68,8 +68,11 @@ function buildPartialCriteria(
 }
 
 export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
-  const { rubric, rubricType, ratings, gradeScale, totalMarks } = input;
+  const { rubric, rubricType, ratings, gradeScale, totalMarks, roundPercentageBeforeBandLookup } = input;
   const explanation: string[] = [];
+  const bandLookupPct = roundPercentageBeforeBandLookup
+    ? (pct: number | null) => (pct != null ? Math.round(pct) : null)
+    : (pct: number | null) => pct;
 
   const criteria = rubric.criteria;
   const levels = rubric.levels;
@@ -170,7 +173,7 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
     weightedMax = ws.weightedMax;
     percentage = ws.percentage;
     if (percentage != null) {
-      scaleBand = findScaleBand(percentage, gradeScale, explanation);
+      scaleBand = findScaleBand(bandLookupPct(percentage)!, gradeScale, explanation);
     }
   } else {
     matchedRule = matchProfileRule(rubric, levels, ratings, explanation);
@@ -181,7 +184,7 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
       weightedMax = ws.weightedMax;
       percentage = ws.percentage;
       if (percentage != null) {
-        scaleBand = findScaleBand(percentage, gradeScale, explanation);
+        scaleBand = findScaleBand(bandLookupPct(percentage)!, gradeScale, explanation);
       }
     } else if (!matchedRule) {
       if (rubric.profileFallback) {
@@ -195,7 +198,7 @@ export function evaluateRubric(input: EvaluateRubricInput): EvaluationResult {
           weightedMax = ws.weightedMax;
           percentage = ws.percentage;
           if (percentage != null) {
-            scaleBand = findScaleBand(percentage, gradeScale, explanation);
+            scaleBand = findScaleBand(bandLookupPct(percentage)!, gradeScale, explanation);
           }
         } else {
           explanation.push(

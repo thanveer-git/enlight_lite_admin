@@ -7,7 +7,7 @@ import { Beaker, CheckCircle2, ChevronDown, ChevronUp, Edit3, FileText, Triangle
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { findGradeScale } from "@/features/rubrics/constants";
-import { GetJsonButton, GradeSimulator } from "@/features/rubrics/simulator/grade-simulator";
+import { GradeSimulator } from "@/features/rubrics/simulator/grade-simulator";
 import { cn } from "@/lib/utils";
 import type { RubricDraft } from "@/features/rubrics/wizard/types";
 import { type ValidationStep, getRubricValidation } from "@/features/rubrics/wizard/validation";
@@ -157,7 +157,6 @@ export function StepReview({ draft, onJumpToStep, compact = false }: StepReviewP
           {!compact && (
             <GradeSimulator embedded matrix={matrix} rubricType={draft.type} rubricName={draft.name} />
           )}
-          <GetJsonButton detail={debugDetail} />
         </div>
       </div>
 

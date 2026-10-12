@@ -5,14 +5,18 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInDays, format } from "date-fns";
 import {
+  Archive,
+  ArchiveRestore,
   ArchiveX,
   Copy,
+  Loader2,
   MoreHorizontal,
   Pencil,
   PlayCircle,
+  Send,
   Trash2,
+  Undo2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { DataTableColumnHeader } from "@/components/composite/data-table/data-table-column-header";
 import { Button } from "@/components/ui/button";
@@ -22,7 +26,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ROUTES } from "@/constants/routes";
 import { RubricSimulatorDialog } from "@/features/rubrics/simulator/rubric-simulator-dialog";
 import { cn } from "@/lib/utils";
 import type { Rubric, RubricStatus, RubricType } from "@/types/rubric";
@@ -80,6 +83,13 @@ function UpdatedCell({ value }: { value: string }) {
 
 export interface RubricRowActions {
   onDelete: (rubric: Rubric) => void;
+  onDuplicate: (rubric: Rubric) => void;
+  onStatusChange: (rubric: Rubric, nextStatus: RubricStatus) => void;
+  onArchiveChange: (rubric: Rubric, nextStatus: RubricStatus) => void;
+  /** Id of the row currently being duplicated, if any. */
+  duplicatingId?: string | null;
+  /** Id of the row currently being published/unpublished/archived, if any. */
+  statusChangingId?: string | null;
 }
 
 export function getRubricColumns(
@@ -164,6 +174,7 @@ export function getRubricColumns(
       cell: ({ row }) => {
         const rubric = row.original;
         const isInUse = rubric.status === "in_use";
+        const isDuplicating = actions.duplicatingId === rubric.id;
         const [simOpen, setSimOpen] = useState(false);
         return (
           <div className="flex items-center justify-end">
@@ -172,10 +183,15 @@ export function getRubricColumns(
                 <Button
                   variant="ghost"
                   size="icon"
+                  disabled={isDuplicating}
                   className="size-9 rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
                   aria-label={`Actions for ${rubric.name}`}
                 >
-                  <MoreHorizontal className="size-4" />
+                  {isDuplicating ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <MoreHorizontal className="size-4" />
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl p-1">
@@ -187,15 +203,67 @@ export function getRubricColumns(
                   Simulate Grading
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-md">
-                  <Link href={ROUTES.admin.rubrics.form(rubric.id)}>
+                  <Link href={`/admin/rubrics/form/${rubric.id}`}>
                     <Pencil className="size-4 text-muted-foreground" />
                     Edit
                   </Link>
                 </DropdownMenuItem>
+                {rubric.status !== "in_use" && rubric.status !== "archived" && (
+                  <DropdownMenuItem
+                    disabled={actions.statusChangingId === rubric.id}
+                    onSelect={() =>
+                      actions.onStatusChange(
+                        rubric,
+                        rubric.status === "published" ? "draft" : "published",
+                      )
+                    }
+                    className="rounded-md"
+                  >
+                    {actions.statusChangingId === rubric.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : rubric.status === "published" ? (
+                      <Undo2 className="size-4 text-muted-foreground" />
+                    ) : (
+                      <Send className="size-4 text-muted-foreground" />
+                    )}
+                    {rubric.status === "published" ? "Move to Draft" : "Publish"}
+                  </DropdownMenuItem>
+                )}
+                {rubric.status === "archived" ? (
+                  <DropdownMenuItem
+                    disabled={actions.statusChangingId === rubric.id}
+                    onSelect={() =>
+                      actions.onArchiveChange(rubric, "draft")
+                    }
+                    className="rounded-md"
+                  >
+                    {actions.statusChangingId === rubric.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ArchiveRestore className="size-4 text-muted-foreground" />
+                    )}
+                    Unarchive
+                  </DropdownMenuItem>
+                ) : (
+                  rubric.status !== "in_use" && (
+                    <DropdownMenuItem
+                      disabled={actions.statusChangingId === rubric.id}
+                      onSelect={() =>
+                        actions.onArchiveChange(rubric, "archived")
+                      }
+                      className="rounded-md"
+                    >
+                      {actions.statusChangingId === rubric.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Archive className="size-4 text-muted-foreground" />
+                      )}
+                      Archive
+                    </DropdownMenuItem>
+                  )
+                )}
                 <DropdownMenuItem
-                  onSelect={() => {
-                    toast.success("Rubric copied", { description: rubric.name });
-                  }}
+                  onSelect={() => actions.onDuplicate(rubric)}
                   className="rounded-md"
                 >
                   <Copy className="size-4 text-muted-foreground" />

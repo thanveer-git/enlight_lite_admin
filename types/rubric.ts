@@ -69,6 +69,14 @@ export interface RubricDetail extends Rubric {
   matrix: RubricMatrix;
 }
 
+export interface RubricCounts {
+  total: number;
+  draft: number;
+  published: number;
+  in_use: number;
+  archived: number;
+}
+
 export const GRADE_TYPE_OPTIONS = [
   { value: "letter", label: "Letter Grade (A–F)" },
   { value: "performance", label: "Performance (Excellent–Poor)" },

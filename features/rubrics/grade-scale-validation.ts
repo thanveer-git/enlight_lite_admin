@@ -200,19 +200,19 @@ export function validateGradeScaleDraft(
 /**
  * Non-blocking warnings surfaced alongside the editor.
  *
- * Per EDUBEX §6: when a scale is already in use (status `in_use` or
- * `published` and has `used > 0`), edits only apply to new assignments
- * — existing assignments keep their original bands.
+ * Per EDUBEX §6: when a scale is already in use (`published` and has
+ * `used > 0`), edits only apply to new assignments — existing
+ * assignments keep their original bands.
  */
 export function getGradeScaleWarnings(input: {
   status: GradeScaleStatus;
   used?: number;
 }): ValidationWarning[] {
   if (input.used === undefined || input.used <= 0) return [];
-  if (input.status !== "in_use" && input.status !== "published") return [];
+  if (input.status !== "published") return [];
   return [
     {
-      field: "in_use",
+      field: "used",
       message: `This grade scale is already used in ${input.used} assignment(s). Existing assignments will not change — edits apply only to new assignments.`,
     },
   ];

@@ -25,7 +25,8 @@ export function SidebarNav({ items }: SidebarNavProps) {
 
   return (
     <ul className="flex flex-col gap-0.5">
-      {items.map((item) => {
+      {items.map((item, idx) => {
+        const itemKey = item.href === "#" ? `nav-${item.title}-${idx}` : item.href;
         const isActive =
           isSubItemActive(pathname, item.href) ||
           (item.subItems?.some((s) => isSubItemActive(pathname, s.href)) ?? false);
@@ -33,7 +34,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
         if (item.subItems && item.subItems.length > 0) {
           return (
             <NavItemWithSubItems
-              key={item.href}
+              key={itemKey}
               item={item}
               isActive={isActive}
               collapsed={collapsed}
@@ -70,7 +71,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
 
         if (collapsed) {
           return (
-            <li key={item.href}>
+            <li key={itemKey}>
               <Tooltip>
                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                 <TooltipContent side="right">{item.title}</TooltipContent>
@@ -79,7 +80,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
           );
         }
 
-        return <li key={item.href}>{link}</li>;
+        return <li key={itemKey}>{link}</li>;
       })}
     </ul>
   );
@@ -154,9 +155,9 @@ function NavItemWithSubItems({
           aria-hidden={!open}
         >
           <ul className="mt-0.5 flex min-h-0 flex-col gap-0.5 overflow-hidden pl-6">
-            {item.subItems!.map((sub) => (
+            {item.subItems!.map((sub, subIdx) => (
               <SubNavItem
-                key={sub.href}
+                key={sub.href === "#" ? `sub-${sub.title}-${subIdx}` : sub.href}
                 sub={sub}
                 active={isSubItemActive(pathname, sub.href)}
               />

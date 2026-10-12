@@ -1,68 +1,232 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { SortingState } from "@tanstack/react-table";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { ArchiveX, Copy, Plus, Search, Send, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/composite/data-table/data-table";
+import { ConfirmDialog } from "@/components/composite/confirm-dialog";
 import { FilterPopover } from "@/components/composite/filter-popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
-import { apiClient } from "@/services/api-client";
-import { FAKE_RUBRICS } from "@/services/handlers/rubrics";
+import { apiClient, ApiError } from "@/services/api-client";
 import { ROUTES } from "@/constants/routes";
 import { ListingPage } from "@/templates/listing-page";
 import { STATUS_OPTIONS, TYPE_OPTIONS } from "@/features/rubrics/constants";
 import { getRubricColumns, statusChipClass } from "@/features/rubrics/columns";
 import { RubricKpiSummary } from "@/features/rubrics/rubric-kpi-summary";
-import type { Rubric, RubricStatus, RubricType } from "@/types/rubric";
+import type { Rubric, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
+
+const EMPTY_COUNTS: RubricCounts = {
+  total: 0,
+  draft: 0,
+  published: 0,
+  in_use: 0,
+  archived: 0,
+};
 
 export default function RubricsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<RubricStatus[]>([]);
   const [type, setType] = useState<RubricType[]>([]);
   const [pendingDelete, setPendingDelete] = useState<Rubric | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<{ rubric: Rubric; nextStatus: RubricStatus } | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [pendingPublish, setPendingPublish] = useState<{ rubric: Rubric; nextStatus: RubricStatus } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [pendingDuplicate, setPendingDuplicate] = useState<Rubric | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [statusChangingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [counts, setCounts] = useState<RubricCounts>(EMPTY_COUNTS);
 
   const debounced = useDebounce(search, 250);
 
+  const sortBy = sorting[0]?.id ?? "";
+  const sortDir = sorting.length > 0
+    ? (sorting[0]?.desc ? "desc" : "asc") as "asc" | "desc"
+    : undefined;
+
+  // Reset to page 1 whenever the filters or sort change so the user
+  // doesn't land on an empty page.
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, status, type, sortBy, sortDir]);
+
+  // Request consolidated KPI counts only on page 1 or when the local
+  // counts state is still empty — avoids redundant GROUP BY queries while
+  // paging.
+  const needCount = page === 1 || counts.total === 0;
+
   const q = useQuery({
-    queryKey: queryKeys.rubrics.list({ search: debounced, status, type }),
-    queryFn: () => apiClient.listRubrics({ search: debounced, status, type, pageSize: 50 }),
+    queryKey: queryKeys.rubrics.list({
+      search: debounced,
+      status,
+      type,
+      page,
+      pageSize,
+      sortBy,
+      sortDir,
+    }),
+    queryFn: () =>
+      apiClient.listRubrics({
+        search: debounced,
+        status,
+        type,
+        page,
+        pageSize,
+        sortBy,
+        sortDir,
+        needCount,
+      }),
   });
 
+  // Cache the consolidated counts so they persist across page navigation.
+  useEffect(() => {
+    if (q.data?.counts) {
+      setCounts(q.data.counts);
+    }
+  }, [q.data?.counts]);
+
+  const allRubrics = q.data?.data ?? [];
+
+  const handleDuplicate = async () => {
+    if (!pendingDuplicate) return;
+    setDuplicatingId(pendingDuplicate.id);
+    try {
+      const copy = await apiClient.duplicateRubric(pendingDuplicate.id);
+      toast.success("Rubric copied", { description: copy.name });
+      setPendingDuplicate(null);
+      q.refetch();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to duplicate rubric");
+      }
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const handleSortingChange = (next: SortingState) => {
+    setSorting(next);
+  };
+
+  const handleStatusChange = (rubric: Rubric, nextStatus: RubricStatus) => {
+    setPendingPublish({ rubric, nextStatus });
+  };
+
+  const handlePublishConfirm = async () => {
+    if (!pendingPublish) return;
+    setPublishing(true);
+    try {
+      await apiClient.changeRubricStatus(pendingPublish.rubric.id, pendingPublish.nextStatus);
+      toast.success(
+        pendingPublish.nextStatus === "published" ? "Rubric published" : "Rubric moved to draft",
+
+        { description: pendingPublish.rubric.name },
+      );
+      setPendingPublish(null);
+      q.refetch();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to update rubric status");
+      }
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleArchiveChange = (rubric: Rubric, nextStatus: RubricStatus) => {
+    setPendingArchive({ rubric, nextStatus });
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (!pendingArchive) return;
+    setArchiving(true);
+    try {
+      await apiClient.changeRubricStatus(pendingArchive.rubric.id, pendingArchive.nextStatus);
+      toast.success(
+        pendingArchive.nextStatus === "archived" ? "Rubric archived" : "Rubric restored",
+        { description: pendingArchive.rubric.name },
+      );
+      setPendingArchive(null);
+      q.refetch();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to update rubric status");
+      }
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await apiClient.deleteRubric(pendingDelete.id.toString());
+      toast.success("Rubric deleted", { description: pendingDelete.name });
+      setPendingDelete(null);
+      q.refetch();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to delete rubric");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const columns = useMemo(
-    () => getRubricColumns({ onDelete: (r) => setPendingDelete(r) }),
-    [],
+    () =>
+      getRubricColumns({
+        onDelete: (r) => setPendingDelete(r),
+        onDuplicate: (r) => setPendingDuplicate(r),
+        onStatusChange: handleStatusChange,
+        onArchiveChange: handleArchiveChange,
+        duplicatingId,
+        statusChangingId,
+      }),
+    [duplicatingId, statusChangingId],
   );
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<RubricStatus, number> = {
-      draft: 0,
-      published: 0,
-      in_use: 0,
-      archived: 0,
-    };
-    for (const r of FAKE_RUBRICS) counts[r.status] += 1;
-    return counts;
-  }, []);
+  const statusCounts = useMemo(
+    () => ({
+      draft: counts.draft,
+      published: counts.published,
+      in_use: counts.in_use,
+      archived: counts.archived,
+    }),
+    [counts],
+  );
+
+  const typeCounts = useMemo(() => {
+    const tc: Record<string, number> = {};
+    for (const r of allRubrics) {
+      tc[r.type] = (tc[r.type] ?? 0) + 1;
+    }
+    return tc;
+  }, [allRubrics]);
 
   const kpiNode = useMemo(
-    () => (
-      <RubricKpiSummary total={FAKE_RUBRICS.length} counts={statusCounts} />
-    ),
-    [statusCounts],
+    () => <RubricKpiSummary total={counts.total} counts={statusCounts} />,
+    [counts.total, statusCounts],
   );
 
   const toolbarNode = useMemo(
@@ -80,12 +244,8 @@ export default function RubricsPage() {
     [search],
   );
 
-  const toolbarFilters = useMemo(() => {
-    const typeCounts: Record<string, number> = {};
-    FAKE_RUBRICS.forEach((r) => {
-      typeCounts[r.type] = (typeCounts[r.type] ?? 0) + 1;
-    });
-    return (
+  const toolbarFilters = useMemo(
+    () => (
       <>
         <FilterPopover
           label="Status"
@@ -109,8 +269,9 @@ export default function RubricsPage() {
           onChange={(next) => setType(next as RubricType[])}
         />
       </>
-    );
-  }, [status, type, statusCounts]);
+    ),
+    [status, type, statusCounts, typeCounts],
+  );
 
   return (
     <ListingPage
@@ -139,45 +300,88 @@ export default function RubricsPage() {
         emptyDescription="Try adjusting your search or filters."
         enableSelection
         showView={false}
+        page={page}
+        pageSize={pageSize}
+        totalRows={q.data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
       />
 
-      <Dialog
+      <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete rubric?</DialogTitle>
-            <DialogDescription>
-              {pendingDelete
-                ? `"${pendingDelete.name}" will be permanently removed. This action cannot be undone.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setPendingDelete(null)}
-              className="rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-xl"
-              onClick={() => {
-                if (pendingDelete) {
-                  toast.success("Rubric deleted", { description: pendingDelete.name });
-                  setPendingDelete(null);
-                }
-              }}
-            >
-              <Trash2 className="mr-1.5 size-4" />
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete rubric?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.name}" will be permanently removed. This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        variant="destructive"
+        icon={Trash2}
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={pendingDuplicate !== null}
+        onOpenChange={(open) => !open && setPendingDuplicate(null)}
+        title="Duplicate rubric?"
+        description={
+          pendingDuplicate
+            ? `A copy of "${pendingDuplicate.name}" will be created as a draft.`
+            : undefined
+        }
+        confirmLabel="Duplicate"
+        icon={Copy}
+        loading={duplicatingId !== null}
+        onConfirm={handleDuplicate}
+      />
+
+      <ConfirmDialog
+        open={pendingArchive !== null}
+        onOpenChange={(open) => !open && setPendingArchive(null)}
+        title={
+          pendingArchive?.nextStatus === "archived"
+            ? "Archive rubric?"
+            : "Unarchive rubric?"
+        }
+        description={
+          pendingArchive
+            ? pendingArchive.nextStatus === "archived"
+              ? `"${pendingArchive.rubric.name}" will be archived and hidden from active use. You can restore it later.`
+              : `"${pendingArchive.rubric.name}" will be restored to draft status.`
+            : undefined
+        }
+        confirmLabel={pendingArchive?.nextStatus === "archived" ? "Archive" : "Unarchive"}
+        variant="destructive"
+        icon={ArchiveX}
+        loading={archiving}
+        onConfirm={handleArchiveConfirm}
+      />
+
+      <ConfirmDialog
+        open={pendingPublish !== null}
+        onOpenChange={(open) => !open && setPendingPublish(null)}
+        title={
+          pendingPublish?.nextStatus === "published"
+            ? "Publish rubric?"
+            : "Move to draft?"
+        }
+        description={
+          pendingPublish
+            ? pendingPublish.nextStatus === "published"
+              ? `"${pendingPublish.rubric.name}" will be published and available to attach to assignments.`
+              : `"${pendingPublish.rubric.name}" will be moved back to draft and will no longer be available for new assignments.`
+            : undefined
+        }
+        confirmLabel={pendingPublish?.nextStatus === "published" ? "Publish" : "Move to Draft"}
+        icon={pendingPublish?.nextStatus === "published" ? Send : Undo2}
+        loading={publishing}
+        onConfirm={handlePublishConfirm}
+      />
     </ListingPage>
   );
 }

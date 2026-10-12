@@ -34,8 +34,6 @@ export function Pagination({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const canPrev = page > 1;
   const canNext = page < totalPages;
-  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, total);
 
   return (
     <div
@@ -68,9 +66,6 @@ export function Pagination({
       )}
 
       <div className="flex items-center gap-2">
-        <p className="text-muted-foreground tabular-nums">
-          {from}–{to} of {total}
-        </p>
         <Button
           variant="outline"
           size="icon"

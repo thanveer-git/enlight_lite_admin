@@ -1,81 +1,236 @@
-import { GRADE_SCALES } from "@/features/rubrics/constants";
-import type { GradeScale, GradeScaleStatus } from "@/features/rubrics/constants";
+import type {
+  GradeScale,
+  GradeScaleConfiguration,
+  GradeScaleMeta,
+  GradeScaleStatus,
+  GradeScaleType,
+} from "@/features/rubrics/constants";
+import { backendFetch, buildQuery, ApiError } from "@/services/api-helpers";
+import { ENDPOINTS } from "@/services/endpoints";
 
-/**
- * In-memory cache for grade-scale lookups.
- *
- * Today this is unused — `getGradeScale` reads straight from the
- * `GRADE_SCALES` mock constant. When the API lands, `fetchGradeScale`
- * will hydrate this map on first access and `getGradeScale` will
- * read from it synchronously, so existing call sites stay sync.
+export { ApiError };
+
+/* ── Sync cache for standalone consumers ───────────────────────────────
+ * The grading listing page uses fetchGradeScales (paginated) which feeds
+ * this cache. Wizards, simulators, and evaluation selectors read from it
+ * synchronously via getGradeScale()/getAllCachedScales().
  */
+
 const cache = new Map<string, GradeScale>();
 
-/**
- * Admin-created or admin-edited scales. Appended to the listing
- * view returned by `fetchGradeScales` so the listing page picks
- * them up without changing the `GRADE_SCALES` constant. When the
- * real API lands, this in-memory list is replaced by the backend.
- */
-const customScales: GradeScale[] = [];
-
-function allScales(): GradeScale[] {
-  return [...GRADE_SCALES, ...customScales];
+function cacheScales(scales: GradeScale[]): void {
+  const previous = new Map(cache);
+  cache.clear();
+  for (const scale of scales) {
+    const prior = previous.get(scale.id);
+    const merged = prior?.bands.length
+      ? { ...scale, bands: prior.bands, ranges: prior.ranges, passBands: prior.passBands }
+      : scale;
+    cache.set(merged.id, merged);
+  }
 }
 
-/**
- * Resolve a single grade-scale definition by id.
- *
- * Synchronous today (reads from `GRADE_SCALES` mock data); will
- * continue to be sync after the API migration by hydrating the
- * in-memory cache first. New scales added by admins won't be
- * visible to this function until the page reloads — acceptable
- * for v1 since the engine doesn't pick up new scales mid-session.
- */
 export function getGradeScale(id: string | null): GradeScale | null {
   if (!id) return null;
-  const cached = cache.get(id);
-  if (cached) return cached;
-  const found = allScales().find((scale) => scale.id === id) ?? null;
-  if (found) cache.set(id, found);
-  return found;
+  return cache.get(id) ?? null;
 }
 
-/**
- * Fetch a single grade-scale definition from the network.
- *
- * Cache-first: returns the cached entry if present, otherwise hits
- * the API and hydrates the cache. Reserved for components that can
- * await — the listing page and detail views. Engine code should
- * keep using `getGradeScale` to stay sync.
- */
-export async function fetchGradeScale(
+export function getAllCachedScales(): GradeScale[] {
+  return Array.from(cache.values());
+}
+
+interface ApiGradeGroup {
+  id: number;
+  name: string;
+  slug: string;
+  gradeType: GradeScaleType;
+  metaConfigs: GradeScaleConfiguration | null;
+  description: string;
+  isDefault: boolean;
+  isPassed: boolean;
+  status: GradeScaleStatus;
+  usedCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+  createdBy: string;
+  bands?: ApiBand[];
+}
+
+interface ApiBand {
+  id: number;
+  gradeGroupSlug: string;
+  name: string;
+  rangeFrom: number;
+  rangeTo: number;
+  sortOrder: number;
+  isPass: boolean | null;
+  status: string;
+}
+
+function apiGroupToGradeScale(group: ApiGradeGroup): GradeScale {
+  const bands = group.bands ?? [];
+  const bandLabels = bands.map((b) => b.name);
+  const ranges = bands.map((b) => ({
+    grade: b.name,
+    minMarks: b.rangeFrom,
+    maxMarks: b.rangeTo,
+  }));
+  const passBands = bands
+    .filter((b) => b.isPass === true)
+    .map((b) => b.name);
+
+  const meta: GradeScaleMeta = {
+    isEditable: !group.isDefault,
+    isDefault: group.isDefault === true,
+    isPassed: group.isPassed === true,
+    status: group.status,
+    gradeType: group.gradeType,
+    description: group.description || undefined,
+  };
+
+  const scale: GradeScale = {
+    id: group.slug,
+    name: group.name,
+    bands: group.gradeType === "letter_grading" ? bandLabels : [],
+    meta,
+    used: group.usedCount,
+  };
+
+  if (group.gradeType === "letter_grading" && ranges.length > 0) {
+    scale.ranges = ranges;
+  }
+  if (group.gradeType === "letter_grading" && passBands.length > 0) {
+    scale.passBands = passBands;
+  }
+  if (group.metaConfigs) {
+    scale.configuration = group.metaConfigs;
+  }
+
+  return scale;
+}
+
+/* ── Listing ─────────────────────────────────────────────────────────── */
+
+export interface GradeScaleCounts {
+  total: number;
+  status: Record<GradeScaleStatus, number>;
+  gradeType: Record<GradeScaleType, number>;
+  passFail: Record<"enabled" | "disabled", number>;
+}
+
+export interface ListGradeScalesParams {
+  search?: string;
+  gradeType?: GradeScaleType[];
+  status?: GradeScaleStatus[];
+  passFail?: ("enabled" | "disabled")[];
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+  needCount?: boolean;
+}
+
+export interface GradeScaleListResult {
+  data: GradeScale[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts?: GradeScaleCounts;
+}
+
+const inFlightDetail = new Map<string, Promise<GradeScale | null>>();
+
+export async function fetchGradeScaleWithBands(
   id: string,
 ): Promise<GradeScale | null> {
   const cached = cache.get(id);
-  if (cached) return cached;
-  // API wiring lands here. Until then, fall through to the mock.
-  return getGradeScale(id);
+  if (cached?.bands.length) return cached;
+  const existing = inFlightDetail.get(id);
+  if (existing) return existing;
+  const promise = (async () => {
+    try {
+      const group = await backendFetch<ApiGradeGroup>(
+        ENDPOINTS.gradeGroups.detail(id),
+      );
+      const scale = apiGroupToGradeScale(group);
+      cache.set(scale.id, scale);
+      return scale;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    } finally {
+      inFlightDetail.delete(id);
+    }
+  })();
+  inFlightDetail.set(id, promise);
+  return promise;
 }
 
-/**
- * Fetch every grade-scale definition.
- *
- * Cache-first per-id. Used by the grading module's listing page.
- * Returns the merged list of built-in + custom scales.
- */
-export async function fetchGradeScales(): Promise<GradeScale[]> {
-  const merged = allScales();
-  for (const scale of merged) {
-    if (!cache.has(scale.id)) cache.set(scale.id, scale);
+export async function fetchGradeScales(
+  params: ListGradeScalesParams = {},
+): Promise<GradeScaleListResult> {
+  const qs = buildQuery({
+    search: params.search || undefined,
+    grade_type: params.gradeType,
+    status: params.status,
+    pass_fail: params.passFail,
+    page: params.page ?? 1,
+    pageSize: params.pageSize ?? 10,
+    sort_by: params.sortBy || undefined,
+    sort_dir: params.sortDir,
+    need_count: params.needCount ? "1" : undefined,
+  });
+
+  const result = await backendFetch<{
+    data: ApiGradeGroup[];
+    total: number;
+    page: number;
+    pageSize: number;
+    counts?: {
+      total: number;
+      status: Record<string, number>;
+      gradeType: Record<string, number>;
+      passFail: Record<string, number>;
+    };
+  }>(ENDPOINTS.gradeGroups.list + qs);
+
+  const data = result.data.map(apiGroupToGradeScale);
+  cacheScales(data);
+
+  let counts: GradeScaleCounts | undefined;
+  if (result.counts) {
+    counts = {
+      total: result.counts.total,
+      status: {
+        draft: result.counts.status.draft ?? 0,
+        published: result.counts.status.published ?? 0,
+        archived: result.counts.status.archived ?? 0,
+      },
+      gradeType: {
+        percentage: result.counts.gradeType.percentage ?? 0,
+        cgpa: result.counts.gradeType.cgpa ?? 0,
+        marks: result.counts.gradeType.marks ?? 0,
+        comp_incomp: result.counts.gradeType.comp_incomp ?? 0,
+        letter_grading: result.counts.gradeType.letter_grading ?? 0,
+      },
+      passFail: {
+        enabled: result.counts.passFail?.enabled ?? 0,
+        disabled: result.counts.passFail?.disabled ?? 0,
+      },
+    };
   }
-  return merged;
+
+  return {
+    data,
+    total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+    counts,
+  };
 }
 
-/**
- * Shape that admin-created / admin-edited scales can carry.
- * Used by the editor form to write back through the resolver.
- */
+/* ── Mutations ───────────────────────────────────────────────────────── */
+
 export interface GradeScaleDraftInput {
   name: string;
   description?: string;
@@ -85,75 +240,119 @@ export interface GradeScaleDraftInput {
   passBands?: string[];
 }
 
-/**
- * Create a new grade scale. Returns the persisted record with a
- * generated id (`gs_<random>`). For mock persistence only.
- */
-export function createGradeScale(input: GradeScaleDraftInput): GradeScale {
-  const id = `gs_${Math.random().toString(36).slice(2, 10)}`;
-  const next: GradeScale = {
-    id,
+export async function createGradeScale(
+  input: GradeScaleDraftInput,
+): Promise<GradeScale> {
+  const body: Record<string, unknown> = {
     name: input.name.trim(),
-    bands: [...input.bands],
-    ranges: input.ranges ? [...input.ranges] : undefined,
-    passBands: input.passBands ? [...input.passBands] : undefined,
-    meta: {
-      isEditable: true,
-      status: input.status,
-      gradeType: "letter_grading",
-      description: input.description?.trim() || undefined,
-    },
+    grade_type: "letter_grading",
+    status: input.status,
+    description: input.description?.trim() || "",
   };
-  customScales.push(next);
-  cache.set(id, next);
-  return next;
+
+  const group = await backendFetch<ApiGradeGroup>(ENDPOINTS.gradeGroups.list, {
+    method: "POST",
+    body,
+  });
+
+  if (input.bands.length > 0 && input.ranges) {
+    for (let i = 0; i < input.bands.length; i++) {
+      const label = input.bands[i];
+      const range = input.ranges.find((r) => r.grade === label);
+      if (!label || label.trim() === "") continue;
+      await backendFetch(ENDPOINTS.gradeGroups.bands(group.slug), {
+        method: "POST",
+        body: {
+          name: label,
+          range_from: range?.minMarks ?? 0,
+          range_to: range?.maxMarks ?? 0,
+          is_pass: input.passBands?.includes(label) ?? false,
+        },
+      });
+    }
+  }
+
+  const full = await backendFetch<ApiGradeGroup>(
+    ENDPOINTS.gradeGroups.detail(group.slug),
+  );
+  const scale = apiGroupToGradeScale(full);
+  cache.set(scale.id, scale);
+  return scale;
 }
 
-/**
- * Update an existing editable (letter-grade) scale. Built-in
- * scales are not patchable — callers should not invoke this on
- * `meta.isEditable === false` records.
- */
-export function updateGradeScale(
+export async function updateGradeScale(
   id: string,
   patch: GradeScaleDraftInput,
-): GradeScale | null {
-  const existing = customScales.find((s) => s.id === id);
-  if (existing && existing.meta) {
-    existing.name = patch.name.trim();
-    existing.bands = [...patch.bands];
-    existing.ranges = patch.ranges ? [...patch.ranges] : undefined;
-    existing.passBands = patch.passBands ? [...patch.passBands] : undefined;
-    existing.meta = {
-      isEditable: existing.meta.isEditable,
-      gradeType: existing.meta.gradeType,
-      status: patch.status,
-      description: patch.description?.trim() || undefined,
-    };
-    cache.set(id, existing);
-    return existing;
+): Promise<GradeScale | null> {
+  try {
+    await backendFetch(ENDPOINTS.gradeGroups.detail(id), {
+      method: "PATCH",
+      body: {
+        name: patch.name.trim(),
+        description: patch.description?.trim() || "",
+        status: patch.status,
+      },
+    });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
   }
 
-  // Edit a built-in / seeded letter scale by promoting it into the
-  // custom list (so the next listing read sees the updated fields).
-  const seeded = GRADE_SCALES.find((s) => s.id === id);
-  if (seeded && seeded.meta) {
-    const next: GradeScale = {
-      ...seeded,
-      name: patch.name.trim(),
-      bands: [...patch.bands],
-      ranges: patch.ranges ? [...patch.ranges] : undefined,
-      passBands: patch.passBands ? [...patch.passBands] : undefined,
-      meta: {
-        isEditable: seeded.meta.isEditable,
-        gradeType: seeded.meta.gradeType,
-        status: patch.status,
-        description: patch.description?.trim() || undefined,
-      },
-    };
-    customScales.push(next);
-    cache.set(id, next);
-    return next;
+  const existing = await backendFetch<ApiGradeGroup>(
+    ENDPOINTS.gradeGroups.detail(id),
+  );
+  const existingBands = existing.bands ?? [];
+
+  for (const band of existingBands) {
+    try {
+      await backendFetch(ENDPOINTS.gradeGroups.bandDetail(band.id), {
+        method: "DELETE",
+      });
+    } catch {
+      // band may already be deleted
+    }
   }
-  return null;
+
+  if (patch.bands.length > 0 && patch.ranges) {
+    for (let i = 0; i < patch.bands.length; i++) {
+      const label = patch.bands[i];
+      const range = patch.ranges.find((r) => r.grade === label);
+      if (!label || label.trim() === "") continue;
+      await backendFetch(ENDPOINTS.gradeGroups.bands(id), {
+        method: "POST",
+        body: {
+          name: label,
+          range_from: range?.minMarks ?? 0,
+          range_to: range?.maxMarks ?? 0,
+          is_pass: patch.passBands?.includes(label) ?? false,
+        },
+      });
+    }
+  }
+
+  const full = await backendFetch<ApiGradeGroup>(
+    ENDPOINTS.gradeGroups.detail(id),
+  );
+  const scale = apiGroupToGradeScale(full);
+  cache.set(scale.id, scale);
+  return scale;
+}
+
+export async function deleteGradeScale(slug: string): Promise<void> {
+  await backendFetch(ENDPOINTS.gradeGroups.detail(slug), {
+    method: "DELETE",
+  });
+}
+
+export async function changeGradeScaleStatus(
+  slug: string,
+  status: GradeScaleStatus,
+): Promise<GradeScale> {
+  const group = await backendFetch<ApiGradeGroup>(
+    ENDPOINTS.gradeGroups.detail(slug),
+    { method: "PATCH", body: { status } },
+  );
+  const scale = apiGroupToGradeScale(group);
+  cache.set(scale.id, scale);
+  return scale;
 }

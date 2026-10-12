@@ -8,6 +8,8 @@ const nextConfig = {
     return [
       { source: "/admin/rubrics", destination: "/admin_modern/rubrics" },
       { source: "/admin/rubrics/:path*", destination: "/admin_modern/rubrics/:path*" },
+      { source: "/admin/grading", destination: "/admin_modern/grading" },
+      { source: "/admin/grading/:path*", destination: "/admin_modern/grading/:path*" },
     ];
   },
 };

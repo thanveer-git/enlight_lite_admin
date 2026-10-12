@@ -65,6 +65,7 @@ function computeEngine(
     ratings: draft.ratings,
     gradeScale,
     totalMarks: submission.totalMarks,
+    roundPercentageBeforeBandLookup: true,
   });
 }
 

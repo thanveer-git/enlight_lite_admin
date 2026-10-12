@@ -4,10 +4,12 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Eye,
-  Lock,
   MoreHorizontal,
   Pencil,
   ScrollText,
+  Send,
+  Trash2,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ROUTES } from "@/constants/routes";
 import {
-  GradeScaleEditabilityChip,
+  GradeScaleDefaultChip,
   GradeScalePassFailChip,
   GradeScaleStatusChip,
   GradeScaleTypeChip,
@@ -43,13 +45,14 @@ const gradeTypeOrder: Record<GradeScaleType, number> = {
 const statusOrder: Record<GradeScaleStatus, number> = {
   draft: 0,
   published: 1,
-  in_use: 2,
-  archived: 3,
+  archived: 2,
 };
 
 export interface GradeScaleRowActions {
   onViewDetails: (scale: GradeScale) => void;
   onWhereUsed: (scale: GradeScale) => void;
+  onDelete: (scale: GradeScale) => void;
+  onStatusChange: (scale: GradeScale, nextStatus: GradeScaleStatus) => void;
 }
 
 export function getGradeScaleColumns(
@@ -66,9 +69,12 @@ export function getGradeScaleColumns(
         const scale = row.original;
         return (
           <div className="max-w-[320px] overflow-hidden" title={scale.name}>
-            <span className="block truncate text-sm font-medium text-foreground">
-              {scale.name}
-            </span>
+            <div className="flex items-center gap-2">
+              {scale.meta?.isDefault && <GradeScaleDefaultChip />}
+              <span className="truncate text-sm font-medium text-foreground">
+                {scale.name}
+              </span>
+            </div>
             {scale.meta?.description && (
               <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 {scale.meta.description}
@@ -107,30 +113,51 @@ export function getGradeScaleColumns(
       },
     },
     {
-      id: "editability",
+      id: "usedBy",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Editability" />
+        <DataTableColumnHeader
+          column={column}
+          title="Used By"
+          className="justify-center"
+        />
       ),
-      meta: { label: "Editability" },
-      cell: ({ row }) => <GradeScaleEditabilityChip scale={row.original} />,
+      meta: { label: "Used By" },
+      accessorFn: (row) => row.used ?? 0,
+      sortingFn: "basic",
+      cell: ({ row }) => {
+        const used = row.original.used ?? 0;
+        if (used === 0) {
+          return (
+            <div className="flex items-center justify-center">
+              <span className="text-sm text-muted-foreground">None</span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-center">
+            <span className="text-sm text-foreground">
+              {used} {used === 1 ? "Rubric" : "Rubrics"}
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: "passFail",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Pass/Fail" />
+        <DataTableColumnHeader
+          column={column}
+          title="Pass/Fail"
+          className="justify-center"
+        />
       ),
       meta: { label: "Pass/Fail" },
-      accessorFn: (row) =>
-        row.meta?.gradeType === "letter_grading" ? 1 : 0,
-      sortingFn: "basic",
-      filterFn: (row, _columnId, filterValue) => {
-        const enabled =
-          row.original.meta?.gradeType === "letter_grading";
-        if (filterValue === "enabled") return enabled;
-        if (filterValue === "disabled") return !enabled;
-        return true;
-      },
-      cell: ({ row }) => <GradeScalePassFailChip scale={row.original} />,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center justify-center">
+          <GradeScalePassFailChip scale={row.original} />
+        </div>
+      ),
     },
     {
       id: "__actions__",
@@ -140,7 +167,14 @@ export function getGradeScaleColumns(
       enableHiding: false,
       cell: ({ row }) => {
         const scale = row.original;
-        const editable = scale.meta?.isEditable ?? false;
+        const isDefault = scale.meta?.isDefault ?? false;
+        const isLetter = scale.meta?.gradeType === "letter_grading";
+        const status = scale.meta?.status;
+        const used = scale.used ?? 0;
+        const isUsed = used > 0;
+        const canChangeStatus = !isDefault && !isUsed;
+        const canDelete = !isDefault && !isUsed;
+        const isPublished = status === "published";
         return (
           <div className="flex items-center justify-end">
             <DropdownMenu>
@@ -155,27 +189,39 @@ export function getGradeScaleColumns(
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl p-1">
-                <DropdownMenuItem
-                  onSelect={() => actions.onViewDetails(scale)}
-                  className="rounded-md"
-                >
-                  <Eye className="size-4 text-muted-foreground" />
-                  View Details
-                </DropdownMenuItem>
-                {editable ? (
+                {isLetter && (
+                  <DropdownMenuItem
+                    onSelect={() => actions.onViewDetails(scale)}
+                    className="rounded-md"
+                  >
+                    <Eye className="size-4 text-muted-foreground" />
+                    View Details
+                  </DropdownMenuItem>
+                )}
+                {!isDefault && (
                   <DropdownMenuItem asChild className="rounded-md">
                     <Link href={ROUTES.admin.grading.form(scale.id)}>
                       <Pencil className="size-4 text-muted-foreground" />
                       Edit
                     </Link>
                   </DropdownMenuItem>
-                ) : (
+                )}
+                {canChangeStatus && (
                   <DropdownMenuItem
-                    disabled
-                    className="rounded-md text-muted-foreground"
+                    onSelect={() =>
+                      actions.onStatusChange(
+                        scale,
+                        isPublished ? "draft" : "published",
+                      )
+                    }
+                    className="rounded-md"
                   >
-                    <Lock className="size-4" />
-                    Edit (built-in)
+                    {isPublished ? (
+                      <Undo2 className="size-4 text-muted-foreground" />
+                    ) : (
+                      <Send className="size-4 text-muted-foreground" />
+                    )}
+                    {isPublished ? "Unpublish" : "Publish"}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -185,6 +231,18 @@ export function getGradeScaleColumns(
                   <ScrollText className="size-4 text-muted-foreground" />
                   Where Used
                 </DropdownMenuItem>
+                {!isDefault && (
+                  <DropdownMenuItem
+                    disabled={!canDelete}
+                    onSelect={() => {
+                      if (canDelete) actions.onDelete(scale);
+                    }}
+                    className="rounded-md text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                    {isUsed ? "Delete (in use)" : "Delete"}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -18,10 +18,12 @@ export const queryKeys = {
     all: ["rubrics"] as const,
     list: (params?: Record<string, unknown>) =>
       params ? ([...queryKeys.rubrics.all, "list", params] as const) : ([...queryKeys.rubrics.all, "list"] as const),
+    detail: (id: string | number) => [...queryKeys.rubrics.all, "detail", String(id)] as const,
   },
   gradeScales: {
     all: ["gradeScales"] as const,
     list: (params?: Record<string, unknown>) =>
       params ? ([...queryKeys.gradeScales.all, "list", params] as const) : ([...queryKeys.gradeScales.all, "list"] as const),
+    detail: (slug: string) => [...queryKeys.gradeScales.all, "detail", slug] as const,
   },
 } as const;

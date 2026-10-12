@@ -73,7 +73,6 @@ const STATUS_DISPLAY: Record<
 > = {
   draft: { label: "Draft", variant: "secondary" },
   published: { label: "Published", variant: "success" },
-  in_use: { label: "In Use", variant: "warning" },
   archived: { label: "Archived", variant: "secondary" },
 };
 

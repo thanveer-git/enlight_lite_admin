@@ -11,8 +11,6 @@ import {
   BookOpen,
   Calculator,
   CheckCircle2,
-  Code,
-  Copy,
   ListChecks,
   RotateCcw,
   XCircle,
@@ -29,11 +27,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -43,7 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { GRADE_SCALES, findGradeScale, type GradeScale, type GradeScaleType } from "@/features/rubrics/constants";
+import { findGradeScale, getAllCachedScales, type GradeScale, type GradeScaleType } from "@/features/rubrics/constants";
+import { fetchGradeScaleWithBands, fetchGradeScales } from "@/features/rubrics/grade-scales";
 import { cn } from "@/lib/utils";
 import { evaluateRubric, type CriterionRating, type EvaluationResult } from "@/features/rubrics/evaluation";
 import type { RubricDetail, RubricMatrix, RubricType } from "@/types/rubric";
@@ -294,7 +288,22 @@ export function GradeSimulator({
     setSelectedScaleId(matrix.suggestedScaleId ?? "");
   }, [matrix]);
 
+  const [, forceScaleRefresh] = useState(0);
+  useEffect(() => {
+    fetchGradeScales().then(() => forceScaleRefresh((n) => n + 1)).catch(() => {});
+  }, []);
+
   const resolvedScaleId = selectedScaleId || suggestedScaleId || "";
+  useEffect(() => {
+    if (!resolvedScaleId) return;
+    const cached = findGradeScale(resolvedScaleId);
+    if (cached && cached.bands.length > 0) return;
+    fetchGradeScaleWithBands(resolvedScaleId)
+      .then(() => forceScaleRefresh((n) => n + 1))
+      .catch(() => {});
+  }, [resolvedScaleId]);
+
+  const gradeScales = getAllCachedScales();
   const selectedScale: GradeScale | null = findGradeScale(resolvedScaleId);
   const scored = rubricType === "scored";
 
@@ -419,6 +428,7 @@ export function GradeSimulator({
                   currentRubricName={rubricName}
                   selectedScaleId={selectedScaleId}
                   onSelectScale={setSelectedScaleId}
+                  gradeScales={gradeScales}
                 />
 
                 <Separator />
@@ -618,7 +628,6 @@ export function GradeSimulator({
             </span>
             <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
           </Button>
-          <GetJsonButton detail={embeddedDetail ?? null} />
         </div>
       ) : (
         <div className="flex w-full items-center gap-3">
@@ -644,7 +653,6 @@ export function GradeSimulator({
             </span>
             <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
           </Button>
-          <GetJsonButton detail={embeddedDetail ?? null} />
         </div>
       )}
     </div>
@@ -708,6 +716,7 @@ function ConfigBlock({
   currentRubricName,
   selectedScaleId,
   onSelectScale,
+  gradeScales,
 }: {
   matrix: RubricMatrix;
   embeddedMatrix?: RubricMatrix | undefined;
@@ -719,6 +728,7 @@ function ConfigBlock({
   currentRubricName: string;
   selectedScaleId: string;
   onSelectScale: (id: string) => void;
+  gradeScales: GradeScale[];
 }) {
   const embeddedOption: RubricOption | null =
     isEmbedded && embeddedMatrix
@@ -788,7 +798,7 @@ function ConfigBlock({
               <SelectValue placeholder="Select grade scale" />
             </SelectTrigger>
             <SelectContent>
-              {GRADE_SCALES.map((scale) => (
+              {gradeScales.map((scale) => (
                 <SelectItem key={scale.id} value={scale.id}>
                   {scale.name}
                 </SelectItem>
@@ -1164,67 +1174,3 @@ function ResultsView({
   );
 }
 
-export function GetJsonButton({ detail }: { detail: RubricDetail | null }) {
-  const [copied, setCopied] = useState(false);
-  const [open, setOpen] = useState(false);
-  const json = useMemo(() => (detail ? JSON.stringify(detail, null, 2) : ""), [detail]);
-
-  const handleCopy = async () => {
-    if (!json) return;
-    try {
-      await navigator.clipboard.writeText(json);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!detail}
-          className="h-9 gap-1.5 border-dashed text-[11px]"
-          title={detail ? "Copy rubric JSON (debug)" : "No rubric loaded"}
-        >
-          <Code className="size-3.5" />
-          GET JSON
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        side="top"
-        className="w-[min(92vw,560px)] p-0"
-      >
-        <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold text-foreground">
-              Rubric JSON
-            </div>
-            <div className="truncate text-[10px] text-muted-foreground">
-              Paste this into FAKE_RUBRIC_DETAILS.
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            disabled={!json}
-            className="h-7 gap-1.5 px-2 text-[11px]"
-          >
-            <Copy className="size-3" />
-            {copied ? "Copied" : "Copy"}
-          </Button>
-        </div>
-        <pre className="max-h-[60vh] overflow-auto bg-slate-950 px-3 py-2 text-[10.5px] leading-snug text-slate-100">
-          <code>{json || "No rubric detail loaded."}</code>
-        </pre>
-      </PopoverContent>
-    </Popover>
-  );
-}
