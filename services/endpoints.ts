@@ -16,8 +16,11 @@ export const ENDPOINTS = {
     changeStatus: (id: string | number) => `/admin/rubrics_api/status/${id}`,
   },
   gradeGroups: {
+    access: "/admin/grades_api/access",
     list: "/admin/grades_api",
     detail: (slug: string) => `/admin/grades_api/groups/${slug}`,
+    changeStatus: "/admin/grades_api/status",
+    delete: "/admin/grades_api/delete",
     bands: (slug: string) => `/admin/grades_api/groups/${slug}/bands`,
     bandDetail: (id: number) => `/admin/grades_api/bands/${id}`,
     reorder: "/admin/grades_api/bands/reorder",

@@ -87,29 +87,21 @@ export function getGradeScaleColumns(
     {
       accessorKey: "meta.gradeType",
       id: "gradeType",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Type" className="justify-center" />
+      ),
       meta: { label: "Type" },
       enableHiding: false,
       accessorFn: (row) => gradeTypeOrder[row.meta?.gradeType ?? "percentage"],
       sortingFn: "basic",
       cell: ({ row }) => {
         const t = row.original.meta?.gradeType;
-        if (!t) return <span className="text-sm text-muted-foreground">—</span>;
-        return <GradeScaleTypeChip type={t} />;
-      },
-    },
-    {
-      accessorKey: "meta.status",
-      id: "status",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-      meta: { label: "Status" },
-      enableHiding: false,
-      accessorFn: (row) => statusOrder[row.meta?.status ?? "published"],
-      sortingFn: "basic",
-      cell: ({ row }) => {
-        const s = row.original.meta?.status;
-        if (!s) return <span className="text-sm text-muted-foreground">—</span>;
-        return <GradeScaleStatusChip status={s} />;
+        if (!t) return <div className="text-center text-sm text-muted-foreground">—</div>;
+        return (
+          <div className="flex items-center justify-center">
+            <GradeScaleTypeChip type={t} />
+          </div>
+        );
       },
     },
     {
@@ -160,6 +152,26 @@ export function getGradeScaleColumns(
       ),
     },
     {
+      accessorKey: "meta.status",
+      id: "status",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" className="justify-center" />
+      ),
+      meta: { label: "Status" },
+      enableHiding: false,
+      accessorFn: (row) => statusOrder[row.meta?.status ?? "published"],
+      sortingFn: "basic",
+      cell: ({ row }) => {
+        const s = row.original.meta?.status;
+        if (!s) return <div className="text-center text-sm text-muted-foreground">—</div>;
+        return (
+          <div className="flex items-center justify-center">
+            <GradeScaleStatusChip status={s} />
+          </div>
+        );
+      },
+    },
+    {
       id: "__actions__",
       header: "",
       size: 64,
@@ -172,7 +184,6 @@ export function getGradeScaleColumns(
         const status = scale.meta?.status;
         const used = scale.used ?? 0;
         const isUsed = used > 0;
-        const canChangeStatus = !isDefault && !isUsed;
         const canDelete = !isDefault && !isUsed;
         const isPublished = status === "published";
         return (
@@ -206,22 +217,22 @@ export function getGradeScaleColumns(
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {canChangeStatus && (
+                {!isDefault && isPublished && (
                   <DropdownMenuItem
-                    onSelect={() =>
-                      actions.onStatusChange(
-                        scale,
-                        isPublished ? "draft" : "published",
-                      )
-                    }
+                    onSelect={() => actions.onStatusChange(scale, "draft")}
                     className="rounded-md"
                   >
-                    {isPublished ? (
-                      <Undo2 className="size-4 text-muted-foreground" />
-                    ) : (
-                      <Send className="size-4 text-muted-foreground" />
-                    )}
-                    {isPublished ? "Unpublish" : "Publish"}
+                    <Undo2 className="size-4 text-muted-foreground" />
+                    Move to Draft
+                  </DropdownMenuItem>
+                )}
+                {!isDefault && !isPublished && (
+                  <DropdownMenuItem
+                    onSelect={() => actions.onStatusChange(scale, "published")}
+                    className="rounded-md"
+                  >
+                    <Send className="size-4 text-muted-foreground" />
+                    Publish
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem

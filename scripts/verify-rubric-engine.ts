@@ -10,6 +10,7 @@ import type {
 
 const scale: GradeScale = {
   id: "1",
+  apiId: 1,
   name: "Letter Grade Scale",
   bands: ["A", "B", "C", "D", "E", "F"],
   ranges: [

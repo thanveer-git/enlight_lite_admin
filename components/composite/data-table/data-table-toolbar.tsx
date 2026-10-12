@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 
 export interface DataTableBulkActionsProps<TData> {
   table: Table<TData>;
+  actions?: (table: Table<TData>) => React.ReactNode;
+  showClearSelection?: boolean;
 }
 
-export function DataTableBulkActions<TData>({ table }: DataTableBulkActionsProps<TData>) {
+export function DataTableBulkActions<TData>({ table, actions, showClearSelection = true }: DataTableBulkActionsProps<TData>) {
   const selected = table.getFilteredSelectedRowModel().rows;
   const count = selected.length;
   const [mounted, setMounted] = useState(false);
@@ -31,55 +33,30 @@ export function DataTableBulkActions<TData>({ table }: DataTableBulkActionsProps
         <span>selected</span>
       </span>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full"
-        aria-label="View selected"
-      >
-        <Eye className="size-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full"
-        aria-label="Sort descending"
-      >
-        <ArrowDown className="size-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full"
-        aria-label="Sort ascending"
-      >
-        <ArrowUp className="size-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full"
-        aria-label="Export selected"
-      >
-        <ArrowDownToLine className="size-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full bg-red-500 text-white hover:bg-red-600 hover:text-white"
-        aria-label="Delete selected"
-      >
-        <Trash2 className="size-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 rounded-full"
-        onClick={() => table.resetRowSelection()}
-        aria-label="Clear selection"
-      >
-        <X className="size-3.5" />
-      </Button>
+      {actions ? actions(table) : (
+        <>
+          <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="View selected">
+            <Eye className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Sort descending">
+            <ArrowDown className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Sort ascending">
+            <ArrowUp className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Export selected">
+            <ArrowDownToLine className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7 rounded-full bg-red-500 text-white hover:bg-red-600 hover:text-white" aria-label="Delete selected">
+            <Trash2 className="size-3.5" />
+          </Button>
+        </>
+      )}
+      {showClearSelection && (
+        <Button variant="ghost" size="icon" className="size-7 rounded-full" onClick={() => table.resetRowSelection()} aria-label="Clear selection">
+          <X className="size-3.5" />
+        </Button>
+      )}
     </div>,
     document.body,
   );

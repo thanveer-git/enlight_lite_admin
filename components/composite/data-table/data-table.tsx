@@ -50,6 +50,9 @@ export interface DataTableProps<TData, TValue> {
   emptyTitle?: string;
   emptyDescription?: string;
   enableSelection?: boolean;
+  canSelectRow?: (row: TData) => boolean;
+  bulkActions?: (table: RTTable<TData>) => React.ReactNode;
+  bulkActionsOnly?: boolean;
   toolbarExtras?: (table: RTTable<TData>) => React.ReactNode;
   showView?: boolean;
   /**
@@ -95,6 +98,9 @@ export function DataTable<TData, TValue>({
   emptyTitle = "No results",
   emptyDescription = "Try adjusting your filters or search.",
   enableSelection = true,
+  canSelectRow,
+  bulkActions,
+  bulkActionsOnly = false,
   toolbarExtras,
   showView = true,
   initialSorting = [],
@@ -180,28 +186,40 @@ export function DataTable<TData, TValue>({
       id: "__select__",
       enableSorting: false,
       enableHiding: false,
-      header: ({ table }) => (
-        <Checkbox
-          aria-label="Select all"
-          checked={table.getIsAllPageRowsSelected()}
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(Boolean(v))}
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          aria-label="Select row"
-          checked={row.getIsSelected()}
-          onCheckedChange={(v) => row.toggleSelected(Boolean(v))}
-        />
-      ),
+      header: ({ table }) => {
+        const selectableRows = table.getRowModel().rows.filter((row) =>
+          canSelectRow ? canSelectRow(row.original) : true,
+        );
+        const selectedCount = selectableRows.filter((row) => row.getIsSelected()).length;
+        return (
+          <Checkbox
+            aria-label="Select all"
+            checked={selectableRows.length > 0 && selectedCount === selectableRows.length}
+            onCheckedChange={(checked) => {
+              for (const row of selectableRows) row.toggleSelected(Boolean(checked));
+            }}
+          />
+        );
+      },
+      cell: ({ row }) => {
+        const selectable = canSelectRow ? canSelectRow(row.original) : true;
+        return selectable ? (
+          <Checkbox
+            aria-label="Select row"
+            checked={row.getIsSelected()}
+            onCheckedChange={(v) => row.toggleSelected(Boolean(v))}
+          />
+        ) : null;
+      },
       size: 32,
     };
     return [selectionColumn, ...columns];
-  }, [columns, enableSelection]);
+  }, [columns, enableSelection, canSelectRow]);
 
   const table = useReactTable<TData>({
     data,
     columns: tableColumns,
+    enableRowSelection: (row) => canSelectRow ? canSelectRow(row.original) : true,
     state: pinEnabled
       ? { sorting, columnVisibility, columnPinning }
       : { sorting, columnVisibility },
@@ -322,7 +340,7 @@ export function DataTable<TData, TValue>({
         </div>
       </div>
 
-      <DataTableBulkActions table={table} />
+      <DataTableBulkActions table={table} actions={bulkActions} showClearSelection={!bulkActionsOnly} />
     </>
   );
 }

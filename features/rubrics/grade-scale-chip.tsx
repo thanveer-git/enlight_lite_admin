@@ -114,7 +114,7 @@ export function GradeScalePassFailChip({
           : "bg-zinc-100 text-zinc-600 ring-zinc-200",
       )}
     >
-      {enabled ? "Enabled" : "Disabled"}
+      {enabled ? "P/F Enabled" : "P/F Disabled"}
     </span>
   );
 }

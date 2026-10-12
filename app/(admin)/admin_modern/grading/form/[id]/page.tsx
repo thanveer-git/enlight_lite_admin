@@ -2,19 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { Save } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/composite/confirm-dialog";
 import { ROUTES } from "@/constants/routes";
 import {
   emptyGradeScaleDraft,
@@ -32,6 +25,7 @@ import {
   validateGradeScaleDraft,
 } from "@/features/rubrics/grade-scale-validation";
 import {
+  checkGradeScaleAccess,
   createGradeScale,
   fetchGradeScaleWithBands,
   updateGradeScale,
@@ -46,15 +40,26 @@ export default function GradeScaleFormPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "0";
   const isEdit = id !== "0";
+  const access = useQuery({
+    queryKey: ["grade-scales", "access"],
+    queryFn: checkGradeScaleAccess,
+    retry: false,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (access.isError) router.replace("/admin/dashboard");
+  }, [access.isError, router]);
 
   const [draft, setDraft] = useState<GradeScaleDraft | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [usedCount, setUsedCount] = useState<number | undefined>(undefined);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"cancel" | "draft" | "publish" | null>(null);
 
   useEffect(() => {
+    if (!access.isSuccess) return;
     let cancelled = false;
     if (isEdit) {
       fetchGradeScaleWithBands(id).then((scale) => {
@@ -74,7 +79,7 @@ export default function GradeScaleFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, isEdit]);
+  }, [access.isSuccess, id, isEdit]);
 
   const issues = useMemo(
     () => (draft ? validateGradeScaleDraft(draft) : []),
@@ -151,6 +156,14 @@ export default function GradeScaleFormPage() {
     }
   };
 
+  if (access.isPending) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking grade access…</div>;
+  }
+
+  if (access.isError) {
+    return null;
+  }
+
   if (notFound) {
     return (
       <FormPage
@@ -200,14 +213,25 @@ export default function GradeScaleFormPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            onClick={() => router.push(ROUTES.admin.grading.all)}
+            onClick={() => setConfirmAction("cancel")}
             disabled={saving}
           >
             Cancel
           </Button>
-          <Button onClick={() => setSaveDialogOpen(true)} disabled={saving}>
-            <Save className="mr-1.5 size-4" />
-            Save
+          <Button
+            variant="outline"
+            onClick={() => setConfirmAction("draft")}
+            disabled={saving}
+          >
+            <FileText className="mr-1.5 size-4" />
+            Save Draft
+          </Button>
+          <Button
+            onClick={() => setConfirmAction("publish")}
+            disabled={saving || blocked}
+          >
+            <Send className="mr-1.5 size-4" />
+            Publish
           </Button>
         </div>
       }
@@ -222,65 +246,46 @@ export default function GradeScaleFormPage() {
         onRemoveBand={handleRemoveBand}
       />
 
-      <Dialog
-        open={saveDialogOpen}
-        onOpenChange={(open) => {
-          if (!saving) setSaveDialogOpen(open);
+      <ConfirmDialog
+        open={confirmAction === "cancel"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title="Discard changes?"
+        description="Any unsaved changes will be lost. Are you sure you want to leave?"
+        confirmLabel="Discard"
+        variant="destructive"
+        onConfirm={() => {
+          setConfirmAction(null);
+          router.push(ROUTES.admin.grading.all);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {blocked ? "Validations to be fixed" : "Validations sorted"}
-            </DialogTitle>
-            <DialogDescription>
-              {blocked
-                ? "Some required fields are missing or invalid. You can save this scale as a draft and finish it later, or cancel and address the issues now."
-                : "All required fields are valid. You can publish this scale now, or cancel to keep editing."}
-            </DialogDescription>
-          </DialogHeader>
-          {blocked && issues.length > 0 && (
-            <ul className="max-h-48 overflow-auto rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              {issues.map((issue, i) => (
-                <li key={i} className="py-0.5">
-                  {issue.message}
-                </li>
-              ))}
-            </ul>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaveDialogOpen(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            {blocked ? (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSaveDialogOpen(false);
-                  handleSave("draft");
-                }}
-                disabled={saving}
-              >
-                Save as draft
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  setSaveDialogOpen(false);
-                  handleSave("published");
-                }}
-                disabled={saving}
-              >
-                Publish
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
+
+      <ConfirmDialog
+        open={confirmAction === "draft"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title="Save as draft?"
+        description={`"${draft.name || "Untitled"}" will be saved as a draft. You can publish it later.`}
+        confirmLabel="Save Draft"
+        icon={FileText}
+        loading={saving}
+        onConfirm={() => {
+          setConfirmAction(null);
+          handleSave("draft");
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmAction === "publish"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title="Publish grade scale?"
+        description={`"${draft.name || "Untitled"}" will be published and available to attach to assignments.`}
+        confirmLabel="Publish"
+        icon={Send}
+        loading={saving}
+        onConfirm={() => {
+          setConfirmAction(null);
+          handleSave("published");
+        }}
+      />
     </FormPage>
   );
 }

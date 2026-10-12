@@ -56,11 +56,14 @@ export function DataTableColumnHeader<TData, TValue>({
   const canPin = !!tableId;
   const pinningControls = useTableColumnPinning(tableId ?? "");
 
+  const centered = className?.includes("justify-center");
+
   if (!canSort && !canPin) {
     return (
       <div
         className={cn(
           "text-xs font-semibold uppercase tracking-wide text-foreground/80",
+          centered && "w-full text-center",
           className,
         )}
       >
@@ -74,13 +77,16 @@ export function DataTableColumnHeader<TData, TValue>({
   const columnId = column.id;
 
   return (
-    <div className={cn("flex items-center", className)}>
+    <div className={cn("flex items-center", centered && "w-full", className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-2 h-8 px-2 text-xs font-semibold uppercase tracking-wide text-foreground/80 hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
+            className={cn(
+              "h-8 px-2 text-xs font-semibold uppercase tracking-wide text-foreground/80 hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground",
+              !centered && "-ml-2",
+            )}
           >
             {isPinned === "left" && (
               <span

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { SortingState } from "@tanstack/react-table";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { SortingState, Table as ReactTable } from "@tanstack/react-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,8 +17,9 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import {
   fetchGradeScales,
-  deleteGradeScale,
-  changeGradeScaleStatus,
+  checkGradeScaleAccess,
+  deleteGradeScales,
+  changeGradeScalesStatus,
   ApiError,
 } from "@/features/rubrics/grade-scales";
 import { getGradeScaleColumns } from "@/features/rubrics/grade-scale-columns";
@@ -72,11 +73,24 @@ export default function GradingPage() {
   const [pageSize, setPageSize] = useState(10);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [counts, setCounts] = useState<GradeScaleCounts>(EMPTY_COUNTS);
+  const access = useQuery({
+    queryKey: ["grade-scales", "access"],
+    queryFn: checkGradeScaleAccess,
+    retry: false,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (access.isError) router.replace("/admin/dashboard");
+  }, [access.isError, router]);
 
   const [pendingDelete, setPendingDelete] = useState<GradeScale | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<{ scale: GradeScale; nextStatus: GradeScaleStatus } | null>(null);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [pendingBulk, setPendingBulk] = useState<"publish" | "draft" | "delete" | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const bulkTable = useRef<ReactTable<GradeScale> | null>(null);
 
   const debounced = useDebounce(search, 250);
 
@@ -92,6 +106,7 @@ export default function GradingPage() {
   const needCount = page === 1 || counts.total === 0;
 
   const q = useQuery({
+    enabled: access.isSuccess,
     queryKey: queryKeys.gradeScales.list({
       search: debounced,
       gradeType: types,
@@ -134,8 +149,15 @@ export default function GradingPage() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await deleteGradeScale(pendingDelete.id);
-      toast.success("Grade scale deleted", { description: pendingDelete.name });
+      const result = await deleteGradeScales([pendingDelete.apiId]);
+      if (result.failed) {
+        const outcome = result.results[0];
+        toast.error(outcome?.reason === "in_use"
+          ? `Grade scale is in use (${outcome.usedCount ?? 0}) and cannot be deleted`
+          : "Grade scale could not be deleted");
+      } else {
+        toast.success("Grade scale deleted", { description: pendingDelete.name });
+      }
       setPendingDelete(null);
       invalidate();
     } catch (e) {
@@ -153,11 +175,21 @@ export default function GradingPage() {
     if (!pendingStatus) return;
     setChangingStatus(true);
     try {
-      await changeGradeScaleStatus(pendingStatus.scale.id, pendingStatus.nextStatus);
-      toast.success(
-        pendingStatus.nextStatus === "published" ? "Grade scale published" : "Grade scale moved to draft",
-        { description: pendingStatus.scale.name },
+      const result = await changeGradeScalesStatus(
+        [pendingStatus.scale.apiId],
+        pendingStatus.nextStatus === "published" ? "published" : "draft",
       );
+      if (result.failed) {
+        const outcome = result.results[0];
+        toast.error(outcome?.reason === "in_use"
+          ? `Grade scale is in use (${outcome.usedCount ?? 0}) and cannot change status`
+          : "Grade scale status could not be changed");
+      } else {
+        toast.success(
+          pendingStatus.nextStatus === "published" ? "Grade scale published" : "Moved to draft",
+          { description: pendingStatus.scale.name },
+        );
+      }
       setPendingStatus(null);
       invalidate();
     } catch (e) {
@@ -169,6 +201,73 @@ export default function GradingPage() {
     } finally {
       setChangingStatus(false);
     }
+  };
+
+  const handleBulkConfirm = async (table: ReactTable<GradeScale>) => {
+    if (!pendingBulk) return;
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    const selected = selectedRows.map((row) => row.original);
+    const action = pendingBulk;
+    setBulkRunning(true);
+    try {
+      const result = action === "delete"
+        ? await deleteGradeScales(selected.map((scale) => scale.apiId))
+        : await changeGradeScalesStatus(
+            selected.map((scale) => scale.apiId),
+            action === "publish" ? "published" : "draft",
+          );
+      const succeededIds = new Set(result.results.filter((item) => item.success).map((item) => item.id));
+      for (const row of selectedRows) {
+        if (succeededIds.has(row.original.apiId)) row.toggleSelected(false);
+      }
+      setPendingBulk(null);
+      invalidate();
+      const failures = result.results.filter((item) => !item.success);
+      const names = failures.map((item) => {
+        const scale = selected.find((entry) => entry.apiId === item.id);
+        const reason = item.reason === "in_use"
+          ? `in use (${item.usedCount ?? 0})`
+          : item.reason === "default_grade"
+            ? "default grade"
+            : item.reason === "not_found"
+              ? "not found"
+              : "operation failed";
+        return `${scale?.name ?? item.id}: ${reason}`;
+      });
+      const verb = action === "delete" ? "deleted" : action === "publish" ? "published" : "moved to draft";
+      if (result.failed === 0) {
+        toast.success(`${result.succeeded} grade scale${result.succeeded === 1 ? "" : "s"} ${verb}`);
+      } else {
+        toast.warning(`${result.succeeded} ${verb}; ${result.failed} skipped`, {
+          description: names.join("; "),
+          duration: 10000,
+        });
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Bulk action failed");
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const renderBulkActions = (table: ReactTable<GradeScale>) => {
+    if (bulkTable.current !== table) bulkTable.current = table;
+    return (
+      <>
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-full px-3" aria-label="Publish selected grades" onClick={() => { bulkTable.current = table; setPendingBulk("publish"); }}>
+          <Send className="size-3.5" />
+          <span>Publish</span>
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-full px-3" aria-label="Move selected grades to draft" onClick={() => { bulkTable.current = table; setPendingBulk("draft"); }}>
+          <Undo2 className="size-3.5" />
+          <span>Move to Draft</span>
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-full bg-red-500 px-3 text-white hover:bg-red-600 hover:text-white" aria-label="Delete selected grades" onClick={() => { bulkTable.current = table; setPendingBulk("delete"); }}>
+          <Trash2 className="size-3.5" />
+          <span>Delete</span>
+        </Button>
+      </>
+    );
   };
 
   const columns = useMemo(
@@ -244,8 +343,16 @@ export default function GradingPage() {
         />
       </>
     ),
-    [types, statuses, passFail, counts],
+    [types, statuses, passFail],
   );
+
+  if (access.isPending) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking grade access…</div>;
+  }
+
+  if (access.isError) {
+    return null;
+  }
 
   return (
     <ListingPage
@@ -273,6 +380,9 @@ export default function GradingPage() {
         emptyTitle="No grade scales match"
         emptyDescription="Try adjusting your search or filters."
         enableSelection
+        canSelectRow={(scale) => !scale.meta?.isDefault}
+        bulkActions={renderBulkActions}
+        bulkActionsOnly
         showView={false}
         tableId="grade-scales"
         page={page}
@@ -312,12 +422,28 @@ export default function GradingPage() {
       />
 
       <ConfirmDialog
+        open={pendingBulk !== null}
+        onOpenChange={(open) => !open && setPendingBulk(null)}
+        title={pendingBulk === "publish" ? "Publish selected grade scales?" : pendingBulk === "draft" ? "Move selected grade scales to draft?" : "Delete selected grade scales?"}
+        description={pendingBulk === "delete"
+          ? `${bulkTable.current?.getFilteredSelectedRowModel().rows.length ?? 0} grade scales selected. Unused scales will be deleted; scales that are in use will be skipped.`
+          : `${bulkTable.current?.getFilteredSelectedRowModel().rows.length ?? 0} grade scales selected. Only unused scales can change status; scales currently in use will be skipped.`}
+        confirmLabel={pendingBulk === "publish" ? "Publish" : pendingBulk === "draft" ? "Move to Draft" : "Delete"}
+        variant={pendingBulk === "delete" ? "destructive" : "default"}
+        icon={pendingBulk === "publish" ? Send : pendingBulk === "draft" ? Undo2 : Trash2}
+        loading={bulkRunning}
+        onConfirm={() => {
+          if (bulkTable.current) void handleBulkConfirm(bulkTable.current);
+        }}
+      />
+
+      <ConfirmDialog
         open={pendingStatus !== null}
         onOpenChange={(open) => !open && setPendingStatus(null)}
         title={
           pendingStatus?.nextStatus === "published"
             ? "Publish grade scale?"
-            : "Unpublish grade scale?"
+            : "Move to draft?"
         }
         description={
           pendingStatus
@@ -326,7 +452,7 @@ export default function GradingPage() {
               : `"${pendingStatus.scale.name}" will be moved back to draft and will no longer be available for new assignments.`
             : undefined
         }
-        confirmLabel={pendingStatus?.nextStatus === "published" ? "Publish" : "Unpublish"}
+        confirmLabel={pendingStatus?.nextStatus === "published" ? "Publish" : "Move to Draft"}
         icon={pendingStatus?.nextStatus === "published" ? Send : Undo2}
         loading={changingStatus}
         onConfirm={handleStatusConfirm}

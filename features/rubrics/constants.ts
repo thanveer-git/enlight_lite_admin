@@ -83,6 +83,7 @@ export interface GradeScaleMeta {
 
 export interface GradeScale {
   id: string;
+  apiId: number;
   name: string;
   /** Display labels in order. For fixed formats this stays `[]`. */
   bands: string[];

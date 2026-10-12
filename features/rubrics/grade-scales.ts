@@ -10,6 +10,10 @@ import { ENDPOINTS } from "@/services/endpoints";
 
 export { ApiError };
 
+export function checkGradeScaleAccess(): Promise<{ allowed: true }> {
+  return backendFetch<{ allowed: true }>(ENDPOINTS.gradeGroups.access);
+}
+
 /* ── Sync cache for standalone consumers ───────────────────────────────
  * The grading listing page uses fetchGradeScales (paginated) which feeds
  * this cache. Wizards, simulators, and evaluation selectors read from it
@@ -90,6 +94,7 @@ function apiGroupToGradeScale(group: ApiGradeGroup): GradeScale {
 
   const scale: GradeScale = {
     id: group.slug,
+    apiId: group.id,
     name: group.name,
     bands: group.gradeType === "letter_grading" ? bandLabels : [],
     meta,
@@ -338,21 +343,33 @@ export async function updateGradeScale(
   return scale;
 }
 
-export async function deleteGradeScale(slug: string): Promise<void> {
-  await backendFetch(ENDPOINTS.gradeGroups.detail(slug), {
-    method: "DELETE",
+export interface GradeScaleBatchItemResult {
+  id: number;
+  success: boolean;
+  reason?: "not_found" | "default_grade" | "in_use" | "update_failed" | "delete_failed";
+  usedCount?: number;
+}
+
+export interface GradeScaleBatchResult {
+  succeeded: number;
+  failed: number;
+  results: GradeScaleBatchItemResult[];
+}
+
+export async function deleteGradeScales(ids: number[]): Promise<GradeScaleBatchResult> {
+  return backendFetch<GradeScaleBatchResult>(ENDPOINTS.gradeGroups.delete, {
+    method: "POST",
+    body: { ids },
   });
 }
 
-export async function changeGradeScaleStatus(
-  slug: string,
-  status: GradeScaleStatus,
-): Promise<GradeScale> {
-  const group = await backendFetch<ApiGradeGroup>(
-    ENDPOINTS.gradeGroups.detail(slug),
-    { method: "PATCH", body: { status } },
-  );
-  const scale = apiGroupToGradeScale(group);
-  cache.set(scale.id, scale);
-  return scale;
+export async function changeGradeScalesStatus(
+  ids: number[],
+  status: "draft" | "published",
+): Promise<GradeScaleBatchResult> {
+  return backendFetch<GradeScaleBatchResult>(ENDPOINTS.gradeGroups.changeStatus, {
+    method: "POST",
+    body: { ids, status },
+  });
 }
+
