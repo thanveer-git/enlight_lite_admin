@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { toast } from "sonner";
+import { apiClient } from "@/services/api-client";
 
 import { RubricWizard } from "@/features/rubrics/wizard/rubric-wizard";
 import { WizardPage } from "@/templates/wizard-page";
@@ -15,6 +17,30 @@ export default function RubricFormPage() {
   const params = useParams<{ id: string }>();
   const rubricId = params?.id ?? "0";
   const isEdit = rubricId !== "0";
+  const permissionsQuery = useQuery({
+    queryKey: ["module-permissions", "rubrics"],
+    queryFn: () => apiClient.getModulePermissions("rubrics"),
+    retry: false,
+    staleTime: 0,
+  });
+  const permissions = permissionsQuery.data ?? [];
+  const hasViewPermission = permissions.includes(1);
+  const hasRequiredPermission = permissions.includes(isEdit ? 3 : 2);
+  const hasAccess = hasViewPermission && hasRequiredPermission;
+
+  useEffect(() => {
+    if (permissionsQuery.isError || (permissionsQuery.isSuccess && !hasAccess)) {
+      router.replace("/admin/dashboard");
+    }
+  }, [permissionsQuery.isError, permissionsQuery.isSuccess, hasAccess, router]);
+
+  if (permissionsQuery.isPending) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking rubric permissions…</div>;
+  }
+
+  if (permissionsQuery.isError || !hasAccess) {
+    return null;
+  }
 
   return (
     <WizardPage

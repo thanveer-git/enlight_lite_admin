@@ -90,6 +90,9 @@ export interface RubricRowActions {
   duplicatingId?: string | null;
   /** Id of the row currently being published/unpublished/archived, if any. */
   statusChangingId?: string | null;
+  canEdit?: boolean;
+  canAdd?: boolean;
+  canDelete?: boolean;
 }
 
 export function getRubricColumns(
@@ -161,6 +164,19 @@ export function getRubricColumns(
       },
     },
     {
+      accessorKey: "usedBy",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Used By" />,
+      meta: { label: "Used By" },
+      cell: ({ row }) => {
+        const count = row.original.usedBy;
+        return (
+          <span className="text-sm text-muted-foreground">
+            {count === 0 ? "None" : `${count} ${count === 1 ? "assignment" : "assignments"}`}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: "updatedAt",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Updated" />,
       cell: ({ row }) => <UpdatedCell value={row.original.updatedAt} />,
@@ -173,7 +189,8 @@ export function getRubricColumns(
       enableHiding: false,
       cell: ({ row }) => {
         const rubric = row.original;
-        const isInUse = rubric.status === "in_use";
+        const isInUse = rubric.usedBy > 0;
+        const statusIsLocked = rubric.status === "in_use";
         const isDuplicating = actions.duplicatingId === rubric.id;
         const [simOpen, setSimOpen] = useState(false);
         return (
@@ -202,15 +219,17 @@ export function getRubricColumns(
                   <PlayCircle className="size-4 text-muted-foreground" />
                   Simulate Grading
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild className="rounded-md">
-                  <Link href={`/admin/rubrics/form/${rubric.id}`}>
-                    <Pencil className="size-4 text-muted-foreground" />
-                    Edit
-                  </Link>
-                </DropdownMenuItem>
-                {rubric.status !== "in_use" && rubric.status !== "archived" && (
+                {actions.canEdit && (
+                  <DropdownMenuItem asChild className="rounded-md">
+                    <Link href={`/admin/rubrics/form/${rubric.id}`}>
+                      <Pencil className="size-4 text-muted-foreground" />
+                      Edit
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {actions.canEdit && !statusIsLocked && rubric.status !== "archived" && (
                   <DropdownMenuItem
-                    disabled={actions.statusChangingId === rubric.id}
+                    disabled={actions.statusChangingId === rubric.id || (rubric.status === "published" && isInUse)}
                     onSelect={() =>
                       actions.onStatusChange(
                         rubric,
@@ -229,7 +248,7 @@ export function getRubricColumns(
                     {rubric.status === "published" ? "Move to Draft" : "Publish"}
                   </DropdownMenuItem>
                 )}
-                {rubric.status === "archived" ? (
+                {actions.canEdit && (rubric.status === "archived" ? (
                   <DropdownMenuItem
                     disabled={actions.statusChangingId === rubric.id}
                     onSelect={() =>
@@ -261,28 +280,32 @@ export function getRubricColumns(
                       Archive
                     </DropdownMenuItem>
                   )
+                ))}
+                {actions.canAdd && (
+                  <DropdownMenuItem
+                    onSelect={() => actions.onDuplicate(rubric)}
+                    className="rounded-md"
+                  >
+                    <Copy className="size-4 text-muted-foreground" />
+                    Duplicate Rubric
+                  </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  onSelect={() => actions.onDuplicate(rubric)}
-                  className="rounded-md"
-                >
-                  <Copy className="size-4 text-muted-foreground" />
-                  Duplicate Rubric
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={isInUse}
-                  onSelect={() => {
-                    if (!isInUse) actions.onDelete(rubric);
-                  }}
-                  className="rounded-md text-destructive focus:text-destructive"
-                >
-                  {isInUse ? (
-                    <ArchiveX className="size-4" />
-                  ) : (
-                    <Trash2 className="size-4" />
-                  )}
-                  {isInUse ? "Delete (in use)" : "Delete"}
-                </DropdownMenuItem>
+                {actions.canDelete && (
+                  <DropdownMenuItem
+                    disabled={isInUse}
+                    onSelect={() => {
+                      if (!isInUse) actions.onDelete(rubric);
+                    }}
+                    className="rounded-md text-destructive focus:text-destructive"
+                  >
+                    {isInUse ? (
+                      <ArchiveX className="size-4" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
+                    {isInUse ? "Delete (in use)" : "Delete"}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <RubricSimulatorDialog

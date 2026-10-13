@@ -6,14 +6,14 @@ import { SidebarNav } from "@/components/composite/app-layout/sidebar-nav";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useNavigation } from "@/hooks/use-navigation";
-import { FAKE_SIDEBAR_RESPONSE } from "@/services/handlers/sidebar";
+import type { InitialData } from "@/services/handlers/sidebar";
 import { useSidebarStore } from "@/stores/sidebar-store";
 
-export function AppSidebarMobile() {
+export function AppSidebarMobile({ data }: { data: InitialData }) {
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
-  const navItems = useNavigation().flatMap((section) => section.items);
-  const logo = FAKE_SIDEBAR_RESPONSE.data.header.logo;
+  const navItems = useNavigation(data.sidebar).flatMap((section) => section.items);
+  const logo = data.header.logo;
 
   return (
     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

@@ -83,7 +83,7 @@ export default function ListingsDemo() {
   return (
     <ListingPage
       breadcrumbs={[
-        { label: "Admin Modern", href: "/admin_modern" },
+        { label: "Admin", href: "/admin" },
         { label: "Listings" },
       ]}
       title="Users"

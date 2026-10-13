@@ -70,7 +70,6 @@ export function emptyGradeScaleDraft(): GradeScaleDraft {
 export function scaleToDraft(scale: GradeScale): GradeScaleDraft {
   const meta = scale.meta;
   const passSet = new Set(scale.passBands ?? []);
-  const anyFlagged = (scale.passBands?.length ?? 0) > 0;
   const bandSet = new Set(scale.bands);
 
   const bands: GradeBandDraft[] = scale.bands.map((label) => {
@@ -99,7 +98,7 @@ export function scaleToDraft(scale: GradeScale): GradeScaleDraft {
     name: scale.name,
     description: meta?.description ?? "",
     status: meta?.status ?? "draft",
-    pfMode: anyFlagged,
+    pfMode: meta?.isPassed === true,
     bands: filledBands,
   };
 }
@@ -116,6 +115,7 @@ export function draftToScaleInput(draft: GradeScaleDraft): {
   name: string;
   description: string;
   status: NonNullable<GradeScale["meta"]>["status"];
+  isPassed: boolean;
   bands: string[];
   ranges: { grade: string; minMarks: number; maxMarks: number }[];
   passBands: string[];
@@ -138,6 +138,7 @@ export function draftToScaleInput(draft: GradeScaleDraft): {
     name: draft.name,
     description: draft.description,
     status: draft.status,
+    isPassed: draft.pfMode,
     bands: labels,
     ranges,
     passBands,

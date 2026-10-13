@@ -25,7 +25,7 @@ export default function WizardsDemo() {
   return (
     <WizardPage
       breadcrumbs={[
-        { label: "Admin Modern", href: "/admin_modern" },
+        { label: "Admin", href: "/admin" },
         { label: "Wizards" },
       ]}
       title="New course wizard"

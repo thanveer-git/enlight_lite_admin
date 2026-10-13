@@ -19,7 +19,7 @@ export default function FormsDemo() {
   return (
     <FormPage
       breadcrumbs={[
-        { label: "Admin Modern", href: "/admin_modern" },
+        { label: "Admin", href: "/admin" },
         { label: "Forms" },
       ]}
       title="Create course"

@@ -14,9 +14,17 @@ export const ENDPOINTS = {
     detail: (id: string | number) => `/admin/rubrics_api/${id}`,
     duplicate: (id: string | number) => `/admin/rubrics_api/duplicate/${id}`,
     changeStatus: (id: string | number) => `/admin/rubrics_api/status/${id}`,
+    bulkStatus: "/admin/rubrics_api/status",
+    delete: (id: string | number) => `/admin/rubrics_api/delete/${id}`,
+    bulkDelete: "/admin/rubrics_api/delete",
+  },
+  configuration: {
+    access: "/admin/configuration/access",
+  },
+  reactConfigs: {
+    initialData: "/admin/react_configs/initialdata",
   },
   gradeGroups: {
-    access: "/admin/grades_api/access",
     list: "/admin/grades_api",
     detail: (slug: string) => `/admin/grades_api/groups/${slug}`,
     changeStatus: "/admin/grades_api/status",

@@ -3,11 +3,12 @@
 import { SidebarNav } from "@/components/composite/app-layout/sidebar-nav";
 import { useNavigation } from "@/hooks/use-navigation";
 import { cn } from "@/lib/utils";
+import type { SidebarApiItem } from "@/services/handlers/sidebar";
 import { useSidebarStore } from "@/stores/sidebar-store";
 
-export function AppSidebar() {
+export function AppSidebar({ items }: { items: SidebarApiItem[] }) {
   const collapsed = useSidebarStore((s) => s.collapsed);
-  const navItems = useNavigation().flatMap((section) => section.items);
+  const navItems = useNavigation(items).flatMap((section) => section.items);
 
   return (
     <aside

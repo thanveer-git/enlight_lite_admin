@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { ROUTES } from "@/constants/routes";
 import type { Navigation, NavItem, NavSubItem } from "@/types/navigation";
 
 import type { SidebarApiItem } from "@/services/handlers/sidebar";
@@ -72,34 +71,6 @@ function pickIcon(item: SidebarApiItem): LucideIcon {
   return FileText;
 }
 
-const RUBRIC_SUBITEM_ICONS = {
-  all: FileText,
-  new: ListChecks,
-};
-
-function buildRubricItem(): NavItem {
-  return {
-    title: "Rubrics",
-    href: ROUTES.admin.rubrics.root,
-    icon: ListChecks,
-    description: "Reusable assessment structures",
-    subItems: [
-      {
-        title: "All Rubrics",
-        href: ROUTES.admin.rubrics.all,
-        icon: RUBRIC_SUBITEM_ICONS.all,
-        description: "Library of existing rubrics",
-      },
-      {
-        title: "New Rubric",
-        href: ROUTES.admin.rubrics.form(0),
-        icon: RUBRIC_SUBITEM_ICONS.new,
-        description: "Create a new rubric",
-      },
-    ],
-  };
-}
-
 function mapSubItem(child: SidebarApiItem): NavSubItem {
   return {
     title: child.label,
@@ -119,44 +90,14 @@ function mapItem(item: SidebarApiItem): NavItem {
 }
 
 export function buildNavigationFromSidebar(items: SidebarApiItem[]): Navigation {
-  const mapped = items
-    .filter((i) => i.type === "item" && i.label !== "Settings")
-    .map(mapItem);
-
-  const rubricIndex = mapped.findIndex((i) => i.title === "Users");
-  const rubricItem = buildRubricItem();
-  if (rubricIndex >= 0) {
-    mapped.splice(rubricIndex + 1, 0, rubricItem);
-  } else {
-    mapped.push(rubricItem);
-  }
-
-  const settingsItem = items.find((i) => i.label === "Settings");
-  const settingsNav: NavItem | null = settingsItem
-    ? {
-        title: settingsItem.label,
-        href: ROUTES.admin.settings,
-        icon: Settings,
-        description: "Workspace and account",
-      }
-    : null;
+  const mapped = items.filter((item) => item.type === "item").map(mapItem);
+  const dashboard = mapped.filter((item) => item.title === "Dashboard");
+  const rest = mapped.filter((item) => item.title !== "Dashboard" && item.title !== "Settings");
+  const settings = mapped.filter((item) => item.title === "Settings");
 
   return [
-    {
-      title: "Overview",
-      items: mapped.filter((i) => i.title === "Dashboard"),
-    },
-    {
-      title: "LMS",
-      items: mapped.filter((i) => i.title !== "Dashboard"),
-    },
-    ...(settingsNav
-      ? [
-          {
-            title: "Settings",
-            items: [settingsNav],
-          },
-        ]
-      : []),
+    ...(dashboard.length ? [{ title: "Overview", items: dashboard }] : []),
+    ...(rest.length ? [{ title: "LMS", items: rest }] : []),
+    ...(settings.length ? [{ title: "Settings", items: settings }] : []),
   ];
 }

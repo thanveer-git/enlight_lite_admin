@@ -10,10 +10,6 @@ import { ENDPOINTS } from "@/services/endpoints";
 
 export { ApiError };
 
-export function checkGradeScaleAccess(): Promise<{ allowed: true }> {
-  return backendFetch<{ allowed: true }>(ENDPOINTS.gradeGroups.access);
-}
-
 /* ── Sync cache for standalone consumers ───────────────────────────────
  * The grading listing page uses fetchGradeScales (paginated) which feeds
  * this cache. Wizards, simulators, and evaluation selectors read from it
@@ -240,6 +236,7 @@ export interface GradeScaleDraftInput {
   name: string;
   description?: string;
   status: GradeScaleStatus;
+  isPassed: boolean;
   bands: string[];
   ranges?: { grade: string; minMarks: number; maxMarks: number }[];
   passBands?: string[];
@@ -253,6 +250,7 @@ export async function createGradeScale(
     grade_type: "letter_grading",
     status: input.status,
     description: input.description?.trim() || "",
+    is_passed: input.isPassed,
   };
 
   const group = await backendFetch<ApiGradeGroup>(ENDPOINTS.gradeGroups.list, {
@@ -289,13 +287,25 @@ export async function updateGradeScale(
   id: string,
   patch: GradeScaleDraftInput,
 ): Promise<GradeScale | null> {
+  let full: ApiGradeGroup;
   try {
-    await backendFetch(ENDPOINTS.gradeGroups.detail(id), {
+    full = await backendFetch<ApiGradeGroup>(ENDPOINTS.gradeGroups.detail(id), {
       method: "PATCH",
       body: {
         name: patch.name.trim(),
         description: patch.description?.trim() || "",
         status: patch.status,
+        is_passed: patch.isPassed,
+        bands: patch.bands.map((label, index) => {
+          const range = patch.ranges?.find((item) => item.grade === label);
+          return {
+            name: label,
+            range_from: range?.minMarks ?? 0,
+            range_to: range?.maxMarks ?? 0,
+            is_pass: patch.passBands?.includes(label) ?? false,
+            sort_order: index,
+          };
+        }),
       },
     });
   } catch (e) {
@@ -303,41 +313,6 @@ export async function updateGradeScale(
     throw e;
   }
 
-  const existing = await backendFetch<ApiGradeGroup>(
-    ENDPOINTS.gradeGroups.detail(id),
-  );
-  const existingBands = existing.bands ?? [];
-
-  for (const band of existingBands) {
-    try {
-      await backendFetch(ENDPOINTS.gradeGroups.bandDetail(band.id), {
-        method: "DELETE",
-      });
-    } catch {
-      // band may already be deleted
-    }
-  }
-
-  if (patch.bands.length > 0 && patch.ranges) {
-    for (let i = 0; i < patch.bands.length; i++) {
-      const label = patch.bands[i];
-      const range = patch.ranges.find((r) => r.grade === label);
-      if (!label || label.trim() === "") continue;
-      await backendFetch(ENDPOINTS.gradeGroups.bands(id), {
-        method: "POST",
-        body: {
-          name: label,
-          range_from: range?.minMarks ?? 0,
-          range_to: range?.maxMarks ?? 0,
-          is_pass: patch.passBands?.includes(label) ?? false,
-        },
-      });
-    }
-  }
-
-  const full = await backendFetch<ApiGradeGroup>(
-    ENDPOINTS.gradeGroups.detail(id),
-  );
   const scale = apiGroupToGradeScale(full);
   cache.set(scale.id, scale);
   return scale;

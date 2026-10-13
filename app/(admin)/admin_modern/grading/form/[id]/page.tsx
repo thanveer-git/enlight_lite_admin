@@ -25,13 +25,13 @@ import {
   validateGradeScaleDraft,
 } from "@/features/rubrics/grade-scale-validation";
 import {
-  checkGradeScaleAccess,
   createGradeScale,
   fetchGradeScaleWithBands,
   updateGradeScale,
 } from "@/features/rubrics/grade-scales";
 import { FormPage } from "@/templates/form-page";
 import { queryKeys } from "@/lib/query-keys";
+import { apiClient } from "@/services/api-client";
 import type { GradeScaleStatus } from "@/features/rubrics/constants";
 
 export default function GradeScaleFormPage() {
@@ -41,15 +41,21 @@ export default function GradeScaleFormPage() {
   const id = params?.id ?? "0";
   const isEdit = id !== "0";
   const access = useQuery({
-    queryKey: ["grade-scales", "access"],
-    queryFn: checkGradeScaleAccess,
+    queryKey: ["module-permissions", "grading"],
+    queryFn: () => apiClient.getModulePermissions("grading"),
     retry: false,
     staleTime: 0,
   });
+  const permissions = access.data ?? [];
+  const hasViewPermission = permissions.includes(1);
+  const hasRequiredPermission = permissions.includes(isEdit ? 3 : 2);
+  const hasAccess = hasViewPermission && hasRequiredPermission;
 
   useEffect(() => {
-    if (access.isError) router.replace("/admin/dashboard");
-  }, [access.isError, router]);
+    if (access.isError || (access.isSuccess && !hasAccess)) {
+      router.replace("/admin/dashboard");
+    }
+  }, [access.isError, access.isSuccess, hasAccess, router]);
 
   const [draft, setDraft] = useState<GradeScaleDraft | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -59,7 +65,7 @@ export default function GradeScaleFormPage() {
   const [confirmAction, setConfirmAction] = useState<"cancel" | "draft" | "publish" | null>(null);
 
   useEffect(() => {
-    if (!access.isSuccess) return;
+    if (!hasAccess) return;
     let cancelled = false;
     if (isEdit) {
       fetchGradeScaleWithBands(id).then((scale) => {
@@ -79,7 +85,7 @@ export default function GradeScaleFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [access.isSuccess, id, isEdit]);
+  }, [hasAccess, id, isEdit]);
 
   const issues = useMemo(
     () => (draft ? validateGradeScaleDraft(draft) : []),
@@ -160,7 +166,7 @@ export default function GradeScaleFormPage() {
     return <div className="p-6 text-sm text-muted-foreground">Checking grade access…</div>;
   }
 
-  if (access.isError) {
+  if (access.isError || !hasAccess) {
     return null;
   }
 

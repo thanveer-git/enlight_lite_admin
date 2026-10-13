@@ -77,6 +77,19 @@ export interface RubricCounts {
   archived: number;
 }
 
+export interface RubricBatchItemResult {
+  id: number;
+  success: boolean;
+  reason?: "not_found" | "in_use" | "update_failed" | "delete_failed";
+  usedCount?: number;
+}
+
+export interface RubricBatchResult {
+  succeeded: number;
+  failed: number;
+  results: RubricBatchItemResult[];
+}
+
 export const GRADE_TYPE_OPTIONS = [
   { value: "letter", label: "Letter Grade (A–F)" },
   { value: "performance", label: "Performance (Excellent–Poor)" },

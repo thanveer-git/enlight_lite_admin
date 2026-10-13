@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { SortingState } from "@tanstack/react-table";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { SortingState, Table as ReactTable } from "@tanstack/react-table";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArchiveX, Copy, Plus, Search, Send, Trash2, Undo2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Archive, ArchiveX, Copy, Plus, Search, Send, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/composite/data-table/data-table";
@@ -20,7 +21,7 @@ import { ListingPage } from "@/templates/listing-page";
 import { STATUS_OPTIONS, TYPE_OPTIONS } from "@/features/rubrics/constants";
 import { getRubricColumns, statusChipClass } from "@/features/rubrics/columns";
 import { RubricKpiSummary } from "@/features/rubrics/rubric-kpi-summary";
-import type { Rubric, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
+import type { Rubric, RubricBatchResult, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
 
 const EMPTY_COUNTS: RubricCounts = {
   total: 0,
@@ -31,6 +32,7 @@ const EMPTY_COUNTS: RubricCounts = {
 };
 
 export default function RubricsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<RubricStatus[]>([]);
   const [type, setType] = useState<RubricType[]>([]);
@@ -42,11 +44,32 @@ export default function RubricsPage() {
   const [publishing, setPublishing] = useState(false);
   const [pendingDuplicate, setPendingDuplicate] = useState<Rubric | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [pendingBulkAction, setPendingBulkAction] = useState<{ action: "delete" | "draft" | "archived" | "published"; rubrics: Rubric[] } | null>(null);
+  const [bulkActing, setBulkActing] = useState(false);
+  const bulkTable = useRef<ReactTable<Rubric> | null>(null);
   const [statusChangingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [counts, setCounts] = useState<RubricCounts>(EMPTY_COUNTS);
+
+  const permissionsQuery = useQuery({
+    queryKey: ["module-permissions", "rubrics"],
+    queryFn: () => apiClient.getModulePermissions("rubrics"),
+    retry: false,
+    staleTime: 0,
+  });
+  const permissions = permissionsQuery.data ?? [];
+  const canView = permissions.includes(1);
+  const canAdd = permissions.includes(2);
+  const canEdit = permissions.includes(3);
+  const canDelete = permissions.includes(4);
+
+  useEffect(() => {
+    if (permissionsQuery.isError || (permissionsQuery.isSuccess && !canView)) {
+      router.replace("/admin/dashboard");
+    }
+  }, [permissionsQuery.isError, permissionsQuery.isSuccess, canView, router]);
 
   const debounced = useDebounce(search, 250);
 
@@ -67,6 +90,7 @@ export default function RubricsPage() {
   const needCount = page === 1 || counts.total === 0;
 
   const q = useQuery({
+    enabled: canView,
     queryKey: queryKeys.rubrics.list({
       search: debounced,
       status,
@@ -96,7 +120,44 @@ export default function RubricsPage() {
     }
   }, [q.data?.counts]);
 
-  const allRubrics = q.data?.data ?? [];
+  const allRubrics = useMemo(() => q.data?.data ?? [], [q.data?.data]);
+
+  const handleBulkAction = async () => {
+    const table = bulkTable.current;
+    if (!pendingBulkAction || !table) return;
+    if ((pendingBulkAction.action === "delete" && !canDelete) || (pendingBulkAction.action !== "delete" && !canEdit)) return;
+    setBulkActing(true);
+    try {
+      const ids = pendingBulkAction.rubrics.map((rubric) => rubric.id);
+      const result: RubricBatchResult = pendingBulkAction.action === "delete"
+        ? await apiClient.deleteRubrics(ids)
+        : await apiClient.changeRubricsStatus(ids, pendingBulkAction.action);
+      const actionLabel = pendingBulkAction.action === "delete"
+        ? "deleted"
+        : pendingBulkAction.action === "draft"
+          ? "moved to draft"
+          : pendingBulkAction.action === "archived"
+            ? "archived"
+            : "published";
+      if (result.failed === 0) {
+        toast.success(`${result.succeeded} rubric${result.succeeded === 1 ? "" : "s"} ${actionLabel}`);
+      } else {
+        const inUseCount = result.results.filter((item) => item.reason === "in_use").length;
+        toast.error(`${result.succeeded} succeeded, ${result.failed} failed`, {
+          description: inUseCount > 0
+            ? `${inUseCount} rubric${inUseCount === 1 ? " is" : "s are"} in use and cannot be ${pendingBulkAction.action === "delete" ? "deleted" : "moved to draft"}.`
+            : "Some selected rubrics could not be processed.",
+        });
+      }
+      table.resetRowSelection();
+      setPendingBulkAction(null);
+      await q.refetch();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to process selected rubrics");
+    } finally {
+      setBulkActing(false);
+    }
+  };
 
   const handleDuplicate = async () => {
     if (!pendingDuplicate) return;
@@ -202,8 +263,11 @@ export default function RubricsPage() {
         onArchiveChange: handleArchiveChange,
         duplicatingId,
         statusChangingId,
+        canEdit,
+        canAdd,
+        canDelete,
       }),
-    [duplicatingId, statusChangingId],
+    [duplicatingId, statusChangingId, canEdit, canAdd, canDelete],
   );
 
   const statusCounts = useMemo(
@@ -273,18 +337,28 @@ export default function RubricsPage() {
     [status, type, statusCounts, typeCounts],
   );
 
+  if (permissionsQuery.isPending) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking rubric permissions…</div>;
+  }
+
+  if (permissionsQuery.isError || !canView) {
+    return null;
+  }
+
   return (
     <ListingPage
       breadcrumbs={[]}
       title="All Rubrics"
       description="Browse and manage every rubric in your workspace."
       actions={
-        <Button asChild size="sm">
-          <Link href={ROUTES.admin.rubrics.form(0)}>
-            <Plus className="mr-1.5 size-4" />
-            New Rubric
-          </Link>
-        </Button>
+        canAdd ? (
+          <Button asChild size="sm">
+            <Link href={ROUTES.admin.rubrics.form(0)}>
+              <Plus className="mr-1.5 size-4" />
+              New Rubric
+            </Link>
+          </Button>
+        ) : null
       }
       kpis={kpiNode}
       toolbar={toolbarNode}
@@ -298,7 +372,66 @@ export default function RubricsPage() {
         onRetry={() => q.refetch()}
         emptyTitle="No rubrics match"
         emptyDescription="Try adjusting your search or filters."
-        enableSelection
+        enableSelection={canEdit || canDelete}
+        bulkActions={(table) => (
+          <>
+            {canEdit && <>
+            <Button
+              id="rubrics_bulk_draft_btn"
+              variant="ghost"
+              size="sm"
+              disabled={bulkActing}
+              onClick={() => {
+                bulkTable.current = table;
+                setPendingBulkAction({ action: "draft", rubrics: table.getFilteredSelectedRowModel().rows.map((row) => row.original) });
+              }}
+            >
+              <Undo2 className="mr-1 size-4" />
+              Move to Draft
+            </Button>
+            <Button
+              id="rubrics_bulk_archive_btn"
+              variant="ghost"
+              size="sm"
+              disabled={bulkActing}
+              onClick={() => {
+                bulkTable.current = table;
+                setPendingBulkAction({ action: "archived", rubrics: table.getFilteredSelectedRowModel().rows.map((row) => row.original) });
+              }}
+            >
+              <Archive className="mr-1 size-4" />
+              Move to Archive
+            </Button>
+            <Button
+              id="rubrics_bulk_publish_btn"
+              variant="ghost"
+              size="sm"
+              disabled={bulkActing}
+              onClick={() => {
+                bulkTable.current = table;
+                setPendingBulkAction({ action: "published", rubrics: table.getFilteredSelectedRowModel().rows.map((row) => row.original) });
+              }}
+            >
+              <Send className="mr-1 size-4" />
+              Publish
+            </Button>
+            </>}
+            {canDelete && <Button
+              id="rubrics_bulk_delete_btn"
+              variant="ghost"
+              size="sm"
+              disabled={bulkActing}
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                bulkTable.current = table;
+                setPendingBulkAction({ action: "delete", rubrics: table.getFilteredSelectedRowModel().rows.map((row) => row.original) });
+              }}
+            >
+              <Trash2 className="mr-1 size-4" />
+              Delete
+            </Button>}
+          </>
+        )}
         showView={false}
         page={page}
         pageSize={pageSize}
@@ -307,6 +440,20 @@ export default function RubricsPage() {
         onPageSizeChange={setPageSize}
         sorting={sorting}
         onSortingChange={handleSortingChange}
+      />
+
+      <ConfirmDialog
+        open={pendingBulkAction !== null}
+        onOpenChange={(open) => !open && !bulkActing && setPendingBulkAction(null)}
+        title={pendingBulkAction?.action === "delete" ? "Delete selected rubrics?" : "Update selected rubrics?"}
+        description={pendingBulkAction
+          ? `${pendingBulkAction.rubrics.length} selected rubric${pendingBulkAction.rubrics.length === 1 ? "" : "s"} will be ${pendingBulkAction.action === "delete" ? "deleted" : pendingBulkAction.action === "draft" ? "moved to draft" : pendingBulkAction.action === "archived" ? "archived" : "published"}. Rubrics in use cannot be deleted or moved to draft.`
+          : undefined}
+        confirmLabel={pendingBulkAction?.action === "delete" ? "Delete" : pendingBulkAction?.action === "draft" ? "Move to Draft" : pendingBulkAction?.action === "archived" ? "Move to Archive" : "Publish"}
+        variant={pendingBulkAction?.action === "delete" ? "destructive" : "default"}
+        icon={pendingBulkAction?.action === "delete" ? Trash2 : pendingBulkAction?.action === "archived" ? Archive : pendingBulkAction?.action === "published" ? Send : Undo2}
+        loading={bulkActing}
+        onConfirm={handleBulkAction}
       />
 
       <ConfirmDialog

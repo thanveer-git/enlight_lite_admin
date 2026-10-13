@@ -3,11 +3,12 @@ import { FAKE_ASSIGNMENTS } from "@/features/assignments/seed";
 import type { AssignmentDraft } from "@/features/assignments/wizard/types";
 import { EMPTY_DRAFT } from "@/features/assignments/wizard/types";
 import type { RubricDraft } from "@/features/rubrics/wizard/types";
-import type { Rubric, RubricDetail, RubricMatrix, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
+import type { Rubric, RubricBatchResult, RubricDetail, RubricMatrix, RubricCounts, RubricStatus, RubricType } from "@/types/rubric";
 import type { User } from "@/types/session";
 import type { PaginatedResponse } from "@/types/table";
 import { backendFetch, buildQuery, ApiError } from "@/services/api-helpers";
 import { ENDPOINTS } from "@/services/endpoints";
+import type { InitialData, InitialDataResponse } from "@/services/handlers/sidebar";
 
 const SIMULATED_LATENCY_MS = 250;
 const rubricInFlight = new Map<string, Promise<RubricDetail | null>>();
@@ -98,6 +99,26 @@ export const apiClient = {
 
   // ── Rubrics (live API) ──────────────────────────────────────────────
 
+  async getInitialData(): Promise<InitialData> {
+    const response = await fetch(ENDPOINTS.reactConfigs.initialData, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, "Unable to load admin navigation");
+    }
+    const result = (await response.json()) as InitialDataResponse;
+    if (!result.status) {
+      throw new ApiError(result.status_code || response.status, result.message || "Unable to load admin navigation");
+    }
+    return result.data;
+  },
+
+  async getModulePermissions(moduleName: string): Promise<number[]> {
+    const qs = buildQuery({ module_name: moduleName });
+    return backendFetch<number[]>(ENDPOINTS.configuration.access + qs);
+  },
+
   async listRubrics(
     params: ListRubricsParams = {},
   ): Promise<PaginatedResponse<Rubric> & { counts?: RubricCounts }> {
@@ -159,7 +180,14 @@ export const apiClient = {
   },
 
   async deleteRubric(id: string): Promise<void> {
-    await backendFetch(ENDPOINTS.rubrics.detail(id), { method: "DELETE" });
+    await backendFetch(ENDPOINTS.rubrics.delete(id), { method: "DELETE" });
+  },
+
+  async deleteRubrics(ids: string[]): Promise<RubricBatchResult> {
+    return backendFetch<RubricBatchResult>(ENDPOINTS.rubrics.bulkDelete, {
+      method: "POST",
+      body: { ids },
+    });
   },
 
   async duplicateRubric(id: string): Promise<Rubric> {
@@ -172,6 +200,13 @@ export const apiClient = {
     return backendFetch<Rubric>(ENDPOINTS.rubrics.changeStatus(id), {
       method: "PATCH",
       body: { status },
+    });
+  },
+
+  async changeRubricsStatus(ids: string[], status: RubricStatus): Promise<RubricBatchResult> {
+    return backendFetch<RubricBatchResult>(ENDPOINTS.rubrics.bulkStatus, {
+      method: "POST",
+      body: { ids, status },
     });
   },
 

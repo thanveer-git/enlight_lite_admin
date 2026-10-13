@@ -15,9 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
+import { apiClient } from "@/services/api-client";
 import {
   fetchGradeScales,
-  checkGradeScaleAccess,
   deleteGradeScales,
   changeGradeScalesStatus,
   ApiError,
@@ -74,15 +74,18 @@ export default function GradingPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [counts, setCounts] = useState<GradeScaleCounts>(EMPTY_COUNTS);
   const access = useQuery({
-    queryKey: ["grade-scales", "access"],
-    queryFn: checkGradeScaleAccess,
+    queryKey: ["module-permissions", "grading"],
+    queryFn: () => apiClient.getModulePermissions("grading"),
     retry: false,
     staleTime: 0,
   });
+  const hasViewPermission = access.data?.includes(1) ?? false;
 
   useEffect(() => {
-    if (access.isError) router.replace("/admin/dashboard");
-  }, [access.isError, router]);
+    if (access.isError || (access.isSuccess && !hasViewPermission)) {
+      router.replace("/admin/dashboard");
+    }
+  }, [access.isError, access.isSuccess, hasViewPermission, router]);
 
   const [pendingDelete, setPendingDelete] = useState<GradeScale | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -106,7 +109,7 @@ export default function GradingPage() {
   const needCount = page === 1 || counts.total === 0;
 
   const q = useQuery({
-    enabled: access.isSuccess,
+    enabled: hasViewPermission,
     queryKey: queryKeys.gradeScales.list({
       search: debounced,
       gradeType: types,
@@ -351,6 +354,14 @@ export default function GradingPage() {
   }
 
   if (access.isError) {
+    return null;
+  }
+
+  if (access.isPending) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking grade access…</div>;
+  }
+
+  if (access.isError || !hasViewPermission) {
     return null;
   }
 

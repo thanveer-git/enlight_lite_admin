@@ -290,8 +290,9 @@ export function GradeSimulator({
 
   const [, forceScaleRefresh] = useState(0);
   useEffect(() => {
+    if (!open) return;
     fetchGradeScales().then(() => forceScaleRefresh((n) => n + 1)).catch(() => {});
-  }, []);
+  }, [open]);
 
   const resolvedScaleId = selectedScaleId || suggestedScaleId || "";
   useEffect(() => {

@@ -26,7 +26,7 @@ export default function SettingsDemo() {
   return (
     <SettingsPage
       breadcrumbs={[
-        { label: "Admin Modern", href: "/admin_modern" },
+        { label: "Admin", href: "/admin" },
         { label: "Settings" },
       ]}
       nav={NAV}

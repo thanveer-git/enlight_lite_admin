@@ -18,10 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initials } from "@/lib/format";
-import { FAKE_SIDEBAR_RESPONSE } from "@/services/handlers/sidebar";
+import type { SidebarProfile } from "@/services/handlers/sidebar";
 
-export function NavUser() {
-  const profile = FAKE_SIDEBAR_RESPONSE.data.profile;
+export function NavUser({ profile, logoutUrl }: { profile: SidebarProfile; logoutUrl: string }) {
   const { setTheme, theme } = useTheme();
   const user = {
     name: profile.us_name,
@@ -89,9 +88,11 @@ export function NavUser() {
           </DropdownMenuPortal>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive focus:text-destructive">
-          <LogOut className="mr-2 size-4" />
-          Sign out
+        <DropdownMenuItem asChild className="text-destructive focus:text-destructive">
+          <a href={logoutUrl}>
+            <LogOut className="mr-2 size-4" />
+            Sign out
+          </a>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -39,6 +39,7 @@ CREATE TABLE `grade_group` (
   `gg_created_by` int NOT NULL,
   `gg_updated_by` int DEFAULT NULL,
   `gg_is_default` enum('0','1') NOT NULL DEFAULT '0',
+  `gg_is_passed` enum('0','1') NOT NULL DEFAULT '0',
   `gg_status` enum('0','1') NOT NULL DEFAULT '1',
   `gg_used_count` int UNSIGNED NOT NULL DEFAULT '0',
   `gg_deleted` enum('0','1') NOT NULL DEFAULT '0'
